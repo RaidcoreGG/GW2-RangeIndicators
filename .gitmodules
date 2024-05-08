@@ -1,6 +1,3 @@
-[submodule "src/imgui"]
-	path = src/imgui
-	url = https://github.com/RaidcoreGG/imgui
 [submodule "src/nexus"]
 	path = src/nexus
 	url = https://github.com/RaidcoreGG/RCGG-lib-nexus-api/
@@ -10,3 +7,6 @@
 [submodule "Scripts"]
 	path = Scripts
 	url = https://github.com/RaidcoreGG/RCGG-Scripts
+[submodule "src/imgui"]
+	path = src/imgui
+	url = https://github.com/RaidcoreGG/imgui
