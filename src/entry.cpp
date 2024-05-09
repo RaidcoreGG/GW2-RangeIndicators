@@ -282,7 +282,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 
 void AddonRender()
 {
-	if (!NexusLink || !MumbleLink || !MumbleIdentity || !NexusLink->IsGameplay) { return; }
+	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
 
 	av_interp.push_back(MumbleLink->AvatarPosition);
 	avf_interp.push_back(MumbleLink->AvatarFront);
