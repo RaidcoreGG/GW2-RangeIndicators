@@ -15,6 +15,7 @@ struct RangeIndicator
 };
 
 extern const char* IS_HITBOX_VISIBLE;
+extern const char* HITBOX_RGBA;
 extern const char* RANGE_INDICATORS;
 
 namespace Settings
@@ -29,6 +30,7 @@ namespace Settings
 	void Save(std::filesystem::path aPath);
 
 	extern bool IsHitboxVisible;
+	extern unsigned int HitboxRGBA;
 	extern std::vector<RangeIndicator> RangeIndicators;
 }
 

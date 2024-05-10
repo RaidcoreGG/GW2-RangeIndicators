@@ -6,6 +6,7 @@
 #include <fstream>
 
 const char* IS_HITBOX_VISIBLE = "IsHitboxVisible";
+const char* HITBOX_RGBA = "HitboxRGBA";
 const char* RANGE_INDICATORS = "RangeIndicators";
 
 namespace Settings
@@ -65,6 +66,7 @@ namespace Settings
 			}
 
 			Settings::Settings[IS_HITBOX_VISIBLE] = true;
+			Settings::Settings[HITBOX_RGBA] = 0xFFFFFFFF;
 
 			return;
 		}
@@ -87,6 +89,11 @@ namespace Settings
 		if (!Settings[IS_HITBOX_VISIBLE].is_null())
 		{
 			Settings[IS_HITBOX_VISIBLE].get_to<bool>(IsHitboxVisible);
+		}
+
+		if (!Settings[HITBOX_RGBA].is_null())
+		{
+			Settings[HITBOX_RGBA].get_to<unsigned int>(HitboxRGBA);
 		}
 
 		if (!Settings[RANGE_INDICATORS].is_null())
@@ -138,5 +145,6 @@ namespace Settings
 	}
 
 	bool IsHitboxVisible = true;
+	unsigned int HitboxRGBA = 0xFFFFFFFF;
 	std::vector<RangeIndicator> RangeIndicators;
 }
