@@ -20,6 +20,7 @@ void AddonUnload();
 void OnMumbleIdentityUpdated(void* aEventArgs);
 void AddonRender();
 void AddonOptions();
+void AddonShortcut();
 
 AddonDefinition AddonDef			= {};
 HMODULE hSelf						= nullptr;
@@ -74,6 +75,8 @@ void AddonLoad(AddonAPI* aApi)
 
 	APIDefs->RegisterRender(ERenderType_Render, AddonRender);
 	APIDefs->RegisterRender(ERenderType_OptionsRender, AddonOptions);
+
+	APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
 
 	AddonPath = APIDefs->GetAddonDirectory("RangeIndicators");
 	SettingsPath = APIDefs->GetAddonDirectory("RangeIndicators/settings.json");
@@ -134,6 +137,11 @@ struct ProjectionData
 
 void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, bool aShaded = true, bool aShowFlanks = false)
 {
+	float fRot = atan2f(MumbleLink->CameraFront.X, MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
+	float camRot = fRot;
+	if (camRot < 0.0f) { camRot += 360.0f; }
+	if (camRot == 0.0f) { camRot = 360.0f; }
+
 	// convert inches to meters
 	aRadius *= 2.54f / 100.0f;
 
@@ -311,7 +319,7 @@ void AddonRender()
 
 	if (Settings::IsHitboxVisible)
 	{
-		DrawCircle(projectionCtx, dl, ImColor(255, 255, 255, 255), 24, true, true);
+		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, 24, true, true);
 	}
 
 	for (RangeIndicator& ri : Settings::RangeIndicators)
@@ -345,11 +353,19 @@ namespace ImGui
 void AddonOptions()
 {
 	ImGui::TextDisabled("Hitbox");
-	if (ImGui::Checkbox("Enabled##Widget", &Settings::IsHitboxVisible))
+	if (ImGui::Checkbox("Enabled##Hitbox", &Settings::IsHitboxVisible))
 	{
 		Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
 		Settings::Save(SettingsPath);
 	}
+
+	if (ImGui::ColorEdit4U32("##Hitbox", &Settings::HitboxRGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
+	{
+		Settings::Settings[HITBOX_RGBA] = Settings::HitboxRGBA;
+		Settings::Save(SettingsPath);
+	}
+	ImGui::SameLine();
+	ImGui::Text("Colour");
 
 	int indexRemove = -1;
 
@@ -408,5 +424,32 @@ void AddonOptions()
 			Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 			Settings::Save(SettingsPath);
 		}
+	}
+}
+
+void AddonShortcut()
+{
+	ImGui::SameLine();
+	if (ImGui::BeginMenu("##"))
+	{
+		if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
+		{
+			Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
+			Settings::Save(SettingsPath);
+		}
+
+		std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+		for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+		{
+			RangeIndicator& ri = Settings::RangeIndicators[i];
+
+			if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
+			{
+				Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
+				Settings::Save(SettingsPath);
+			}
+		}
+
+		ImGui::EndMenu();
 	}
 }
