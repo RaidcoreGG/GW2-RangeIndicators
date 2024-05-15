@@ -319,7 +319,34 @@ void AddonRender()
 
 	if (Settings::IsHitboxVisible)
 	{
-		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, 24, true, true);
+		float radius = 24.0f; // normal player
+		switch (MumbleLink->Context.MountIndex)
+		{
+		case Mumble::EMountIndex::Raptor:
+		case Mumble::EMountIndex::Griffon:
+		case Mumble::EMountIndex::RollerBeetle:
+		case Mumble::EMountIndex::Skyscale:
+			radius = 60.0f;
+			break;
+
+		case Mumble::EMountIndex::Springer:
+		case Mumble::EMountIndex::Jackal:
+			radius = 50.0f;
+			break;
+
+		case Mumble::EMountIndex::Skimmer:
+			radius = 66.0f;
+			break;
+
+		case Mumble::EMountIndex::Warclaw:
+			radius = 40.0f;
+			break;
+
+		case Mumble::EMountIndex::SiegeTurtle:
+			radius = 80.0f;
+			break;
+		}
+		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, true, true);
 	}
 
 	for (RangeIndicator& ri : Settings::RangeIndicators)
