@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 
+const char* IS_VISIBLE = "IsVisible";
 const char* IS_HITBOX_VISIBLE = "IsHitboxVisible";
 const char* HITBOX_RGBA = "HitboxRGBA";
 const char* RANGE_INDICATORS = "RangeIndicators";
@@ -86,6 +87,11 @@ namespace Settings
 			}
 		}
 
+		if (!Settings[IS_VISIBLE].is_null())
+		{
+			Settings[IS_VISIBLE].get_to<bool>(IsVisible);
+		}
+
 		if (!Settings[IS_HITBOX_VISIBLE].is_null())
 		{
 			Settings[IS_HITBOX_VISIBLE].get_to<bool>(IsHitboxVisible);
@@ -144,6 +150,7 @@ namespace Settings
 		Settings::Mutex.unlock();
 	}
 
+	bool IsVisible = true;
 	bool IsHitboxVisible = true;
 	unsigned int HitboxRGBA = 0xFFFFFFFF;
 	std::vector<RangeIndicator> RangeIndicators;

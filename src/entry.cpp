@@ -17,6 +17,7 @@ namespace dx = DirectX;
 
 void AddonLoad(AddonAPI* aApi);
 void AddonUnload();
+void ProcessKeybinds(const char* aIdentifier);
 void OnMumbleIdentityUpdated(void* aEventArgs);
 void AddonRender();
 void AddonOptions();
@@ -78,6 +79,8 @@ void AddonLoad(AddonAPI* aApi)
 
 	APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
 
+	APIDefs->RegisterKeybindWithString("KB_RI_TOGGLEVISIBLE", ProcessKeybinds, "(null)");
+
 	AddonPath = APIDefs->GetAddonDirectory("RangeIndicators");
 	SettingsPath = APIDefs->GetAddonDirectory("RangeIndicators/settings.json");
 	std::filesystem::create_directory(AddonPath);
@@ -91,10 +94,21 @@ void AddonUnload()
 
 	APIDefs->UnsubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 
+	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
+
 	MumbleLink = nullptr;
 	NexusLink = nullptr;
+}
 
-	Settings::Save(SettingsPath);
+void ProcessKeybinds(const char* aIdentifier)
+{
+	std::string str = aIdentifier;
+
+	if (str == "KB_RI_TOGGLEVISIBLE")
+	{
+		Settings::IsVisible = !Settings::IsVisible;
+		Settings::Save(SettingsPath);
+	}
 }
 
 void OnMumbleIdentityUpdated(void* aEventArgs)
@@ -298,6 +312,8 @@ void AddonRender()
 	av_interp.erase(av_interp.begin());
 	avf_interp.erase(avf_interp.begin());
 
+	if (!Settings::IsVisible) { return; }
+
 	dx::XMVECTOR camPos = { MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
 
 	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, { MumbleLink->CameraFront.X, MumbleLink->CameraFront.Y, MumbleLink->CameraFront.Z });
@@ -379,7 +395,16 @@ namespace ImGui
 
 void AddonOptions()
 {
+	if (ImGui::Checkbox("Enabled##Global", &Settings::IsVisible))
+	{
+		Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
+		Settings::Save(SettingsPath);
+	}
+
+	ImGui::Separator();
+
 	ImGui::TextDisabled("Hitbox");
+
 	if (ImGui::Checkbox("Enabled##Hitbox", &Settings::IsHitboxVisible))
 	{
 		Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
@@ -459,21 +484,32 @@ void AddonShortcut()
 	ImGui::SameLine();
 	if (ImGui::BeginMenu("##"))
 	{
-		if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
+		if (ImGui::Checkbox("Enabled##Global", &Settings::IsVisible))
 		{
-			Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
+			Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
 			Settings::Save(SettingsPath);
 		}
 
-		std::lock_guard<std::mutex> lock(Settings::RangesMutex);
-		for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+		if (Settings::IsVisible)
 		{
-			RangeIndicator& ri = Settings::RangeIndicators[i];
+			ImGui::Separator();
 
-			if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
+			if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
 			{
-				Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
+				Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
 				Settings::Save(SettingsPath);
+			}
+
+			std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+			for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+			{
+				RangeIndicator& ri = Settings::RangeIndicators[i];
+
+				if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
+				{
+					Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
+					Settings::Save(SettingsPath);
+				}
 			}
 		}
 
