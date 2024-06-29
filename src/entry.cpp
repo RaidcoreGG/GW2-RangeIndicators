@@ -149,7 +149,7 @@ struct ProjectionData
 	dx::XMMATRIX WorldMatrix;
 };
 
-void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, bool aShaded = true, bool aShowFlanks = false)
+void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, bool aShaded = true, bool aShowFlanks = false)
 {
 	float fRot = atan2f(MumbleLink->CameraFront.X, MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
 	float camRot = fRot;
@@ -160,21 +160,35 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	aRadius *= 2.54f / 100.0f;
 	aVOffset *= 2.54f / 100.0f;
 
+	float flankOffset = aArc / 2;
+
+	if (aArc == 360.0f)
+	{
+		flankOffset = 45.0f;
+	}
+	else
+	{
+		aShowFlanks = true;
+	}
+
+	float facingRad = atan2f(aProjection.AgentFront.X, aProjection.AgentFront.Z);
+	float facingDeg = facingRad * 180.0f / 3.14159f;
+
+	float flankOffsetRad = flankOffset * 3.14159f / 180.0f;
+
 	std::vector<Vector3> circle;
 	for (size_t i = 0; i < 200; i++)
 	{
-		float degRad = i * 360.0f / 200 * 3.14159f / 180.0f;
+		float degRad = i * aArc / 200 * 3.14159f / 180.0f;
 
-		float x = aRadius * sin(degRad) + aProjection.AgentPosition.X;
-		float z = aRadius * cos(degRad) + aProjection.AgentPosition.Z;
+		float x = aRadius * sin(degRad - flankOffsetRad + facingRad) + aProjection.AgentPosition.X;
+		float z = aRadius * cos(degRad - flankOffsetRad + facingRad) + aProjection.AgentPosition.Z;
 
 		circle.push_back(Vector3{ x, aProjection.AgentPosition.Y + aVOffset, z });
 	}
 
-	float facingDeg = atan2f(aProjection.AgentFront.X, aProjection.AgentFront.Z) * 180.0f / 3.14159f;
-
-	float offsetRF = 45.0f + facingDeg;
-	float offsetLF = 315.0f + facingDeg;
+	float offsetRF = 0 + flankOffset + facingDeg;
+	float offsetLF = 360.0f - flankOffset + facingDeg;
 
 	if (offsetRF > 360.0f) { offsetRF -= 360.0f; }
 	if (offsetRF < 0.0f) { offsetRF += 360.0f; }
@@ -233,7 +247,11 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 				!((first.Z < 0.0f) || (first.Z > 1.0f) ||
 					(previous.Z < 0.0f) || (previous.Z > 1.0f)))
 			{
-				dl->AddLine(ImVec2(first.X + 1.0f, first.Y + 1.0f), ImVec2(circleProj[i].X + 1.0f, circleProj[i].Y + 1.0f), ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w));
+				/* connect circle, if radius 360 */
+				if (aArc == 360.0f)
+				{
+					dl->AddLine(ImVec2(first.X + 1.0f, first.Y + 1.0f), ImVec2(circleProj[i].X + 1.0f, circleProj[i].Y + 1.0f), ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w));
+				}
 			}
 			previous = circleProj[i];
 		}
@@ -297,7 +315,11 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 			!((first.Z < 0.0f) || (first.Z > 1.0f) ||
 			(previous.Z < 0.0f) || (previous.Z > 1.0f)))
 		{
-			dl->AddLine(ImVec2(first.X, first.Y), ImVec2(circleProj[i].X, circleProj[i].Y), aColor);
+			/* connect circle, if radius 360 */
+			if (aArc == 360.0f)
+			{
+				dl->AddLine(ImVec2(first.X, first.Y), ImVec2(circleProj[i].X, circleProj[i].Y), aColor);
+			}
 		}
 		previous = circleProj[i];
 	}
@@ -363,14 +385,14 @@ void AddonRender()
 			radius = 80.0f;
 			break;
 		}
-		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, true, true);
+		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, 360, true, true);
 	}
 
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
 		if (!ri.IsVisible) { continue; }
 
-		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, true, false);
+		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, true, false);
 	}
 }
 
@@ -420,11 +442,11 @@ void AddonOptions()
 	ImGui::SameLine();
 	ImGui::Text("Colour");
 
+	ImGui::Separator();
+
 	int indexRemove = -1;
 
-	ImGui::TextDisabled("Range Indicators");
-	
-	ImGui::BeginTable("#rangeindicatorslist", 6, ImGuiTableFlags_SizingFixedFit);
+	ImGui::BeginTable("#rangeindicatorslist", 7, ImGuiTableFlags_SizingFixedFit);
 
 	ImGui::TableNextRow();
 
@@ -432,6 +454,9 @@ void AddonOptions()
 	ImGui::Text("Radius");
 
 	ImGui::TableSetColumnIndex(3);
+	ImGui::Text("Arc Radius");
+
+	ImGui::TableSetColumnIndex(4);
 	ImGui::Text("Vertical Offset");
 
 	std::lock_guard<std::mutex> lock(Settings::RangesMutex);
@@ -455,7 +480,7 @@ void AddonOptions()
 			Settings::Save(SettingsPath);
 		}
 
-		float inputWidth = ImGui::CalcTextSize("################").x;
+		float inputWidth = ImGui::CalcTextSize("############").x;
 
 		ImGui::TableSetColumnIndex(2);
 		ImGui::PushItemWidth(inputWidth);
@@ -468,13 +493,22 @@ void AddonOptions()
 
 		ImGui::TableSetColumnIndex(3);
 		ImGui::PushItemWidth(inputWidth);
+		if (ImGui::InputFloat(("##Arc" + std::to_string(i)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
+		{
+			bool sort = true;
+			Settings::Settings[RANGE_INDICATORS][i]["Arc"] = ri.Arc;
+			Settings::Save(SettingsPath);
+		}
+
+		ImGui::TableSetColumnIndex(4);
+		ImGui::PushItemWidth(inputWidth);
 		if (ImGui::InputFloat(("##VOffset" + std::to_string(i)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
 		{
 			Settings::Settings[RANGE_INDICATORS][i]["VOffset"] = ri.VOffset;
 			Settings::Save(SettingsPath);
 		}
 
-		ImGui::TableSetColumnIndex(4);
+		ImGui::TableSetColumnIndex(5);
 		if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
 		{
 			indexRemove = i;

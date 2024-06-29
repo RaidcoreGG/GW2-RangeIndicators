@@ -13,6 +13,7 @@ struct RangeIndicator
 	float Radius;
 	bool IsVisible;
 	float VOffset;
+	float Arc;
 };
 
 extern const char* IS_VISIBLE;

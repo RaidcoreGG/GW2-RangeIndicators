@@ -28,35 +28,40 @@ namespace Settings
 				0xFFFFFFFF,
 				130,
 				true,
-				0
+				0,
+				360
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				240,
 				true,
-				0
+				0,
+				360
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				360,
 				true,
-				0
+				0,
+				360
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				600,
 				true,
-				0
+				0,
+				360
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				900,
 				true,
-				0
+				0,
+				360
 			});
 
 			for (RangeIndicator& ri : Settings::RangeIndicators)
@@ -68,6 +73,7 @@ namespace Settings
 				jRi["Radius"] = ri.Radius;
 				jRi["IsVisible"] = ri.IsVisible;
 				jRi["VOffset"] = ri.VOffset;
+				jRi["Arc"] = ri.Arc;
 
 				Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 			}
@@ -123,6 +129,7 @@ namespace Settings
 				if (!ri["Radius"].is_null()) { ri["Radius"].get_to(rangeIndicator.Radius); }
 				if (!ri["IsVisible"].is_null()) { ri["IsVisible"].get_to(rangeIndicator.IsVisible); }
 				if (!ri["VOffset"].is_null()) { ri["VOffset"].get_to(rangeIndicator.VOffset); }
+				if (!ri["Arc"].is_null()) { ri["Arc"].get_to(rangeIndicator.Arc); } else { rangeIndicator.Arc = 360; }
 
 				RangeIndicators.push_back(rangeIndicator);
 			}
@@ -141,6 +148,7 @@ namespace Settings
 				jRi["Radius"] = ri.Radius;
 				jRi["IsVisible"] = ri.IsVisible;
 				jRi["VOffset"] = ri.VOffset;
+				jRi["Arc"] = ri.Arc;
 				Settings[RANGE_INDICATORS].push_back(jRi);
 			}
 		}
