@@ -12,6 +12,7 @@ struct RangeIndicator
 	unsigned int RGBA;
 	float Radius;
 	bool IsVisible;
+	float VOffset;
 };
 
 extern const char* IS_VISIBLE;

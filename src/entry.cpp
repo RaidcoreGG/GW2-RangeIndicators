@@ -149,7 +149,7 @@ struct ProjectionData
 	dx::XMMATRIX WorldMatrix;
 };
 
-void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, bool aShaded = true, bool aShowFlanks = false)
+void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, bool aShaded = true, bool aShowFlanks = false)
 {
 	float fRot = atan2f(MumbleLink->CameraFront.X, MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
 	float camRot = fRot;
@@ -158,6 +158,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 
 	// convert inches to meters
 	aRadius *= 2.54f / 100.0f;
+	aVOffset *= 2.54f / 100.0f;
 
 	std::vector<Vector3> circle;
 	for (size_t i = 0; i < 200; i++)
@@ -167,7 +168,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 		float x = aRadius * sin(degRad) + aProjection.AgentPosition.X;
 		float z = aRadius * cos(degRad) + aProjection.AgentPosition.Z;
 
-		circle.push_back(Vector3{ x, aProjection.AgentPosition.Y, z });
+		circle.push_back(Vector3{ x, aProjection.AgentPosition.Y + aVOffset, z });
 	}
 
 	float facingDeg = atan2f(aProjection.AgentFront.X, aProjection.AgentFront.Z) * 180.0f / 3.14159f;
@@ -362,14 +363,14 @@ void AddonRender()
 			radius = 80.0f;
 			break;
 		}
-		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, true, true);
+		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, true, true);
 	}
 
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
 		if (!ri.IsVisible) { continue; }
 
-		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, true, false);
+		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, true, false);
 	}
 }
 
@@ -422,60 +423,83 @@ void AddonOptions()
 	int indexRemove = -1;
 
 	ImGui::TextDisabled("Range Indicators");
+	
+	ImGui::BeginTable("#rangeindicatorslist", 6, ImGuiTableFlags_SizingFixedFit);
+
+	ImGui::TableNextRow();
+
+	ImGui::TableSetColumnIndex(2);
+	ImGui::Text("Radius");
+
+	ImGui::TableSetColumnIndex(3);
+	ImGui::Text("Vertical Offset");
+
+	std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+	for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
 	{
-		std::lock_guard<std::mutex> lock(Settings::RangesMutex);
-		for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+		RangeIndicator& ri = Settings::RangeIndicators[i];
+
+		ImGui::TableNextRow();
+
+		ImGui::TableSetColumnIndex(0);
+		if (ImGui::Checkbox(("##Visible" + std::to_string(i)).c_str(), &ri.IsVisible))
 		{
-			RangeIndicator& ri = Settings::RangeIndicators[i];
-
-			if (ImGui::Checkbox(("##Visible" + std::to_string(i)).c_str(), &ri.IsVisible))
-			{
-				Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
-				Settings::Save(SettingsPath);
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(i)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
-			{
-				Settings::Settings[RANGE_INDICATORS][i]["RGBA"] = ri.RGBA;
-				Settings::Save(SettingsPath);
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::InputFloat(("##Radius" + std::to_string(i)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
-			{
-				bool sort = true;
-				Settings::Settings[RANGE_INDICATORS][i]["Radius"] = ri.Radius;
-				Settings::Save(SettingsPath);
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
-			{
-				indexRemove = i;
-			}
-		}
-
-		if (indexRemove > -1)
-		{
-			Settings::RangeIndicators.erase(Settings::RangeIndicators.begin() + indexRemove);
-			Settings::Settings[RANGE_INDICATORS].erase(indexRemove);
+			Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
 			Settings::Save(SettingsPath);
 		}
 
-		if (ImGui::SmallButton("Add"))
+		ImGui::TableSetColumnIndex(1);
+		if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(i)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
 		{
-			Settings::RangeIndicators.push_back(RangeIndicator{ 0xFFFFFFFF, 0, true });
-			json jRi{};
-			jRi["RGBA"] = 0xFFFFFFFF;
-			jRi["Radius"] = 0;
-			jRi["IsVisible"] = true;
-			Settings::Settings[RANGE_INDICATORS].push_back(jRi);
+			Settings::Settings[RANGE_INDICATORS][i]["RGBA"] = ri.RGBA;
 			Settings::Save(SettingsPath);
 		}
+
+		float inputWidth = ImGui::CalcTextSize("################").x;
+
+		ImGui::TableSetColumnIndex(2);
+		ImGui::PushItemWidth(inputWidth);
+		if (ImGui::InputFloat(("##Radius" + std::to_string(i)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
+		{
+			bool sort = true;
+			Settings::Settings[RANGE_INDICATORS][i]["Radius"] = ri.Radius;
+			Settings::Save(SettingsPath);
+		}
+
+		ImGui::TableSetColumnIndex(3);
+		ImGui::PushItemWidth(inputWidth);
+		if (ImGui::InputFloat(("##VOffset" + std::to_string(i)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
+		{
+			Settings::Settings[RANGE_INDICATORS][i]["VOffset"] = ri.VOffset;
+			Settings::Save(SettingsPath);
+		}
+
+		ImGui::TableSetColumnIndex(4);
+		if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
+		{
+			indexRemove = i;
+		}
+	}
+
+	ImGui::EndTable();
+
+	if (indexRemove > -1)
+	{
+		Settings::RangeIndicators.erase(Settings::RangeIndicators.begin() + indexRemove);
+		Settings::Settings[RANGE_INDICATORS].erase(indexRemove);
+		Settings::Save(SettingsPath);
+	}
+
+	if (ImGui::SmallButton("Add"))
+	{
+		Settings::RangeIndicators.push_back(RangeIndicator{ 0xFFFFFFFF, 0, true });
+		json jRi{};
+		jRi["RGBA"] = 0xFFFFFFFF;
+		jRi["Radius"] = 0;
+		jRi["IsVisible"] = true;
+		jRi["VOffset"] = 0;
+		Settings::Settings[RANGE_INDICATORS].push_back(jRi);
+		Settings::Save(SettingsPath);
 	}
 }
 

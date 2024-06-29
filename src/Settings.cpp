@@ -27,31 +27,36 @@ namespace Settings
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				130,
-				true
+				true,
+				0
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				240,
-				true
+				true,
+				0
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				360,
-				true
+				true,
+				0
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				600,
-				true
+				true,
+				0
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
 				900,
-				true
+				true,
+				0
 			});
 
 			for (RangeIndicator& ri : Settings::RangeIndicators)
@@ -62,6 +67,7 @@ namespace Settings
 				jRi["RGBA"] = ri.RGBA;
 				jRi["Radius"] = ri.Radius;
 				jRi["IsVisible"] = ri.IsVisible;
+				jRi["VOffset"] = ri.VOffset;
 
 				Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 			}
@@ -113,9 +119,10 @@ namespace Settings
 				}
 
 				RangeIndicator rangeIndicator{};
-				ri["RGBA"].get_to(rangeIndicator.RGBA);
-				ri["Radius"].get_to(rangeIndicator.Radius);
-				ri["IsVisible"].get_to(rangeIndicator.IsVisible);
+				if (!ri["RGBA"].is_null()) { ri["RGBA"].get_to(rangeIndicator.RGBA); }
+				if (!ri["Radius"].is_null()) { ri["Radius"].get_to(rangeIndicator.Radius); }
+				if (!ri["IsVisible"].is_null()) { ri["IsVisible"].get_to(rangeIndicator.IsVisible); }
+				if (!ri["VOffset"].is_null()) { ri["VOffset"].get_to(rangeIndicator.VOffset); }
 
 				RangeIndicators.push_back(rangeIndicator);
 			}
@@ -133,6 +140,7 @@ namespace Settings
 				jRi["RGBA"] = ri.RGBA;
 				jRi["Radius"] = ri.Radius;
 				jRi["IsVisible"] = ri.IsVisible;
+				jRi["VOffset"] = ri.VOffset;
 				Settings[RANGE_INDICATORS].push_back(jRi);
 			}
 		}
