@@ -451,10 +451,10 @@ void AddonOptions()
 	ImGui::TableNextRow();
 
 	ImGui::TableSetColumnIndex(2);
-	ImGui::Text("Radius");
+	ImGui::Text("Range");
 
 	ImGui::TableSetColumnIndex(3);
-	ImGui::Text("Arc Radius");
+	ImGui::Text("Radius");
 
 	ImGui::TableSetColumnIndex(4);
 	ImGui::Text("Vertical Offset");
