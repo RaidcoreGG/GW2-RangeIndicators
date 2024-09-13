@@ -149,6 +149,11 @@ struct ProjectionData
 	dx::XMMATRIX WorldMatrix;
 };
 
+bool DepthOK(float& aDepth)
+{
+	return /*aDepth >= 0.0f && */aDepth <= 1.0f;
+}
+
 void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, bool aShaded = true, bool aShowFlanks = false)
 {
 	float fRot = atan2f(MumbleLink->CameraFront.X, MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
@@ -170,6 +175,8 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	{
 		aShowFlanks = true;
 	}
+
+	ImColor shadowColor = ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w);
 
 	float facingRad = atan2f(aProjection.AgentFront.X, aProjection.AgentFront.Z);
 	float facingDeg = facingRad * 180.0f / 3.14159f;
@@ -200,8 +207,8 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	float cosLF = cos(offsetLF * 3.14159f / 180.0f);
 	float sinLF = sin(offsetLF * 3.14159f / 180.0f);
 
-	Vector3 rightFlank = { aRadius * sinRF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y, aRadius * cosRF + aProjection.AgentPosition.Z };
-	Vector3 leftFlank = { aRadius * sinLF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y, aRadius * cosLF + aProjection.AgentPosition.Z };
+	Vector3 rightFlank = { aRadius * sinRF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aRadius * cosRF + aProjection.AgentPosition.Z };
+	Vector3 leftFlank = { aRadius * sinLF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aRadius * cosLF + aProjection.AgentPosition.Z };
 
 	ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
@@ -227,101 +234,103 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 		circleProj.push_back(Vector3{ pointProjected.m128_f32[0], pointProjected.m128_f32[1], depth });
 	}
 
-	/* two passes for black first "shadow" then white for actual lines */
-	Vector3 first{};
-	Vector3 previous{};
-	if (aShaded)
-	{
-		for (size_t i = 0; i < circleProj.size(); i++)
-		{
-			if (i == 0)
-			{
-				first = circleProj[i];
-			}
-			else if (!((circleProj[i].Z < 0.0f) || (circleProj[i].Z > 1.0f) ||
-				(previous.Z < 0.0f) || (previous.Z > 1.0f)))
-			{
-				dl->AddLine(ImVec2(previous.X + 1.0f, previous.Y + 1.0f), ImVec2(circleProj[i].X + 1.0f, circleProj[i].Y + 1.0f), ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w));
-			}
-			if (i == circleProj.size() - 1 &&
-				!((first.Z < 0.0f) || (first.Z > 1.0f) ||
-					(previous.Z < 0.0f) || (previous.Z > 1.0f)))
-			{
-				/* connect circle, if radius 360 */
-				if (aArc == 360.0f)
-				{
-					dl->AddLine(ImVec2(first.X + 1.0f, first.Y + 1.0f), ImVec2(circleProj[i].X + 1.0f, circleProj[i].Y + 1.0f), ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w));
-				}
-			}
-			previous = circleProj[i];
-		}
-	}
+	Vector3 origin{};
 
 	if (aShowFlanks)
 	{
 		/* don't forget these three for facing cone */
 		dx::XMVECTOR RFProj = dx::XMVector3Project({ rightFlank.X, rightFlank.Y, rightFlank.Z }, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f, aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix);
 		dx::XMVECTOR LFProj = dx::XMVector3Project({ leftFlank.X, leftFlank.Y, leftFlank.Z }, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f, aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix);
-		dx::XMVECTOR originProj = dx::XMVector3Project({ aProjection.AgentPosition.X, aProjection.AgentPosition.Y, aProjection.AgentPosition.Z }, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f, aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix);
+		dx::XMVECTOR originProj = dx::XMVector3Project({ aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aProjection.AgentPosition.Z }, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f, aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix);
 
 		dx::XMVECTOR RFTransformed = dx::XMVector3TransformCoord({ rightFlank.X, rightFlank.Y, rightFlank.Z }, aProjection.WorldMatrix);
 		RFTransformed = dx::XMVector3TransformCoord(RFTransformed, aProjection.ViewMatrix);
 		RFTransformed = dx::XMVector3TransformCoord(RFTransformed, aProjection.ProjectionMatrix);
-		RFProj.m128_f32[2] = dx::XMVectorGetZ(RFTransformed);
-
+		
 		dx::XMVECTOR LFTransformed = dx::XMVector3TransformCoord({ leftFlank.X, leftFlank.Y, leftFlank.Z }, aProjection.WorldMatrix);
 		LFTransformed = dx::XMVector3TransformCoord(LFTransformed, aProjection.ViewMatrix);
 		LFTransformed = dx::XMVector3TransformCoord(LFTransformed, aProjection.ProjectionMatrix);
-		LFProj.m128_f32[2] = dx::XMVectorGetZ(LFTransformed);
-
+		
 		dx::XMVECTOR originTransformed = dx::XMVector3TransformCoord({ aProjection.AgentPosition.X, aProjection.AgentPosition.Y, aProjection.AgentPosition.Z }, aProjection.WorldMatrix);
 		originTransformed = dx::XMVector3TransformCoord(originTransformed, aProjection.ViewMatrix);
 		originTransformed = dx::XMVector3TransformCoord(originTransformed, aProjection.ProjectionMatrix);
-		originProj.m128_f32[2] = dx::XMVectorGetZ(originTransformed);
 
-		if (!((originProj.m128_f32[2] < 0.0f) || (originProj.m128_f32[2] > 1.0f)))
+		rightFlank = Vector3{ RFProj.m128_f32[0], RFProj.m128_f32[1], dx::XMVectorGetZ(RFTransformed) };
+		leftFlank = Vector3{ LFProj.m128_f32[0], LFProj.m128_f32[1], dx::XMVectorGetZ(LFTransformed) };
+		origin = Vector3{ originProj.m128_f32[0], originProj.m128_f32[1], dx::XMVectorGetZ(originTransformed) };
+	}
+
+	/* pass for the "shadows" */
+	if (aShaded)
+	{
+		for (size_t i = 0; i < circleProj.size(); i++)
 		{
-			if (!((RFProj.m128_f32[2] < 0.0f) || (RFProj.m128_f32[2] > 1.0f)))
+			if (i > 0)
 			{
-				if (aShaded)
-				{
-					dl->AddLine(ImVec2(RFProj.m128_f32[0] + 1.0f, RFProj.m128_f32[1] + 1.0f), ImVec2(originProj.m128_f32[0] + 1.0f, originProj.m128_f32[1] + 1.0f), ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w));
-				}
-				dl->AddLine(ImVec2(RFProj.m128_f32[0], RFProj.m128_f32[1]), ImVec2(originProj.m128_f32[0], originProj.m128_f32[1]), aColor);
+				Vector3& p1 = circleProj[i - 1];
+				Vector3& p2 = circleProj[i];
+				if (DepthOK(p1.Z) && DepthOK(p2.Z))
+					dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(p2.X + 1.0f, p2.Y + 1.0f), shadowColor);
 			}
-			if (!((LFProj.m128_f32[2] < 0.0f) || (LFProj.m128_f32[2] > 1.0f)))
-			{
-				if (aShaded)
-				{
-					dl->AddLine(ImVec2(LFProj.m128_f32[0] + 1.0f, LFProj.m128_f32[1] + 1.0f), ImVec2(originProj.m128_f32[0] + 1.0f, originProj.m128_f32[1] + 1.0f), ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w));
-				}
-				dl->AddLine(ImVec2(LFProj.m128_f32[0], LFProj.m128_f32[1]), ImVec2(originProj.m128_f32[0], originProj.m128_f32[1]), aColor);
-			}
+		}
+
+		if (aArc == 360.0f)
+		{
+			Vector3& p1 = circleProj[circleProj.size() - 1];
+			Vector3& p2 = circleProj[0];
+			if (DepthOK(p1.Z) && DepthOK(p2.Z))
+				dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(p2.X + 1.0f, p2.Y + 1.0f), shadowColor);
+		}
+		else /*if (aShowFlanks)*/
+		{
+			Vector3& p1 = circleProj[circleProj.size() - 1];
+			Vector3& p2 = circleProj[0];
+			if (DepthOK(p1.Z) && DepthOK(p2.Z))
+				dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(rightFlank.X + 1.0f, rightFlank.Y + 1.0f), shadowColor);
+		}
+
+		if (aShowFlanks)
+		{
+			if (DepthOK(rightFlank.Z) && DepthOK(origin.Z))
+				dl->AddLine(ImVec2(rightFlank.X + 1.0f, rightFlank.Y + 1.0f), ImVec2(origin.X + 1.0f, origin.Y + 1.0f), shadowColor);
+			if (DepthOK(leftFlank.Z) && DepthOK(origin.Z))
+				dl->AddLine(ImVec2(leftFlank.X + 1.0f, leftFlank.Y + 1.0f), ImVec2(origin.X + 1.0f, origin.Y + 1.0f), shadowColor);
 		}
 	}
 
+	/* (maybe second) pass for the actual lines */
 	for (size_t i = 0; i < circleProj.size(); i++)
 	{
-		if (i == 0)
+		if (i > 0)
 		{
-			first = circleProj[i];
+			Vector3& p1 = circleProj[i - 1];
+			Vector3& p2 = circleProj[i];
+			if (DepthOK(p1.Z) && DepthOK(p2.Z))
+				dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(p2.X, p2.Y), aColor);
 		}
-		else if (!((circleProj[i].Z < 0.0f) || (circleProj[i].Z > 1.0f) ||
-			(previous.Z < 0.0f) || (previous.Z > 1.0f)))
-		{
-			dl->AddLine(ImVec2(previous.X, previous.Y), ImVec2(circleProj[i].X, circleProj[i].Y), aColor);
-		}
-		if (i == circleProj.size() - 1 &&
-			!((first.Z < 0.0f) || (first.Z > 1.0f) ||
-			(previous.Z < 0.0f) || (previous.Z > 1.0f)))
-		{
-			/* connect circle, if radius 360 */
-			if (aArc == 360.0f)
-			{
-				dl->AddLine(ImVec2(first.X, first.Y), ImVec2(circleProj[i].X, circleProj[i].Y), aColor);
-			}
-		}
-		previous = circleProj[i];
+	}
+
+	if (aArc == 360.0f)
+	{
+		Vector3& p1 = circleProj[circleProj.size() - 1];
+		Vector3& p2 = circleProj[0];
+		if (DepthOK(p1.Z) && DepthOK(p2.Z))
+			dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(p2.X, p2.Y), aColor);
+	}
+	else /*if (aShowFlanks)*/
+	{
+		Vector3& p1 = circleProj[circleProj.size() - 1];
+		Vector3& p2 = circleProj[0];
+		if (DepthOK(p1.Z) && DepthOK(p2.Z))
+			dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(rightFlank.X, rightFlank.Y), aColor);
+	}
+
+	if (aShowFlanks)
+	{
+		if (DepthOK(rightFlank.Z) && DepthOK(origin.Z))
+			dl->AddLine(ImVec2(rightFlank.X, rightFlank.Y), ImVec2(origin.X, origin.Y), aColor);
+		if (DepthOK(leftFlank.Z) && DepthOK(origin.Z))
+			dl->AddLine(ImVec2(leftFlank.X, leftFlank.Y), ImVec2(origin.X, origin.Y), aColor);
 	}
 }
 
@@ -480,7 +489,7 @@ void AddonOptions()
 			Settings::Save(SettingsPath);
 		}
 
-		float inputWidth = ImGui::CalcTextSize("############").x;
+		float inputWidth = ImGui::GetWindowContentRegionWidth() / 4;
 
 		ImGui::TableSetColumnIndex(2);
 		ImGui::PushItemWidth(inputWidth);
