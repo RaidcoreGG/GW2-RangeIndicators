@@ -14,6 +14,7 @@ struct RangeIndicator
 	bool IsVisible;
 	float VOffset;
 	float Arc;
+	float Thickness;
 };
 
 extern const char* IS_VISIBLE;

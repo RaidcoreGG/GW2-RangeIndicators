@@ -29,7 +29,8 @@ namespace Settings
 				130,
 				true,
 				0,
-				360
+				360,
+				1
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -37,7 +38,8 @@ namespace Settings
 				240,
 				true,
 				0,
-				360
+				360,
+				1
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -45,7 +47,8 @@ namespace Settings
 				360,
 				true,
 				0,
-				360
+				360,
+				1
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -53,7 +56,8 @@ namespace Settings
 				600,
 				true,
 				0,
-				360
+				360,
+				1
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -61,7 +65,8 @@ namespace Settings
 				900,
 				true,
 				0,
-				360
+				360,
+				1
 			});
 
 			for (RangeIndicator& ri : Settings::RangeIndicators)
@@ -74,6 +79,7 @@ namespace Settings
 				jRi["IsVisible"] = ri.IsVisible;
 				jRi["VOffset"] = ri.VOffset;
 				jRi["Arc"] = ri.Arc;
+				jRi["Thickness"] = ri.Thickness;
 
 				Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 			}
@@ -130,6 +136,7 @@ namespace Settings
 				if (!ri["IsVisible"].is_null()) { ri["IsVisible"].get_to(rangeIndicator.IsVisible); }
 				if (!ri["VOffset"].is_null()) { ri["VOffset"].get_to(rangeIndicator.VOffset); }
 				if (!ri["Arc"].is_null()) { ri["Arc"].get_to(rangeIndicator.Arc); } else { rangeIndicator.Arc = 360; }
+				if (!ri["Thickness"].is_null()) { ri["Thickness"].get_to(rangeIndicator.Thickness); } else { rangeIndicator.Thickness = 1; }
 
 				RangeIndicators.push_back(rangeIndicator);
 			}
@@ -149,6 +156,7 @@ namespace Settings
 				jRi["IsVisible"] = ri.IsVisible;
 				jRi["VOffset"] = ri.VOffset;
 				jRi["Arc"] = ri.Arc;
+				jRi["Thickness"] = ri.Thickness;
 				Settings[RANGE_INDICATORS].push_back(jRi);
 			}
 		}

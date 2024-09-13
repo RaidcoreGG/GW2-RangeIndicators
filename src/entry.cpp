@@ -154,7 +154,7 @@ bool DepthOK(float& aDepth)
 	return /*aDepth >= 0.0f && */aDepth <= 1.0f;
 }
 
-void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, bool aShaded = true, bool aShowFlanks = false)
+void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, float aThickness, bool aShaded = true, bool aShowFlanks = false)
 {
 	float fRot = atan2f(MumbleLink->CameraFront.X, MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
 	float camRot = fRot;
@@ -194,26 +194,14 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 		circle.push_back(Vector3{ x, aProjection.AgentPosition.Y + aVOffset, z });
 	}
 
-	float offsetRF = 0 + flankOffset + facingDeg;
-	float offsetLF = 360.0f - flankOffset + facingDeg;
-
-	if (offsetRF > 360.0f) { offsetRF -= 360.0f; }
-	if (offsetRF < 0.0f) { offsetRF += 360.0f; }
-	if (offsetLF > 360.0f) { offsetLF -= 360.0f; }
-	if (offsetLF < 0.0f) { offsetLF += 360.0f; }
-
-	float cosRF = cos(offsetRF * 3.14159f / 180.0f);
-	float sinRF = sin(offsetRF * 3.14159f / 180.0f);
-	float cosLF = cos(offsetLF * 3.14159f / 180.0f);
-	float sinLF = sin(offsetLF * 3.14159f / 180.0f);
-
-	Vector3 rightFlank = { aRadius * sinRF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aRadius * cosRF + aProjection.AgentPosition.Z };
-	Vector3 leftFlank = { aRadius * sinLF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aRadius * cosLF + aProjection.AgentPosition.Z };
+	Vector3 rightFlank;
+	Vector3 leftFlank;
 
 	ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
 	std::vector<Vector3> circleProj;
 
+	/* generate circle points */
 	for (size_t i = 0; i < circle.size(); i++)
 	{
 		dx::XMVECTOR point = { circle[i].X, circle[i].Y, circle[i].Z };
@@ -236,8 +224,25 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 
 	Vector3 origin{};
 
+	/* transform flanks */
 	if (aShowFlanks)
 	{
+		float offsetRF = 0 + flankOffset + facingDeg;
+		float offsetLF = 360.0f - flankOffset + facingDeg;
+
+		if (offsetRF > 360.0f) { offsetRF -= 360.0f; }
+		if (offsetRF < 0.0f) { offsetRF += 360.0f; }
+		if (offsetLF > 360.0f) { offsetLF -= 360.0f; }
+		if (offsetLF < 0.0f) { offsetLF += 360.0f; }
+
+		float cosRF = cos(offsetRF * 3.14159f / 180.0f);
+		float sinRF = sin(offsetRF * 3.14159f / 180.0f);
+		float cosLF = cos(offsetLF * 3.14159f / 180.0f);
+		float sinLF = sin(offsetLF * 3.14159f / 180.0f);
+
+		rightFlank = { aRadius * sinRF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aRadius * cosRF + aProjection.AgentPosition.Z };
+		leftFlank = { aRadius * sinLF + aProjection.AgentPosition.X, aProjection.AgentPosition.Y + aVOffset, aRadius * cosLF + aProjection.AgentPosition.Z };
+
 		/* don't forget these three for facing cone */
 		dx::XMVECTOR RFProj = dx::XMVector3Project({ rightFlank.X, rightFlank.Y, rightFlank.Z }, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f, aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix);
 		dx::XMVECTOR LFProj = dx::XMVector3Project({ leftFlank.X, leftFlank.Y, leftFlank.Z }, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f, aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix);
@@ -270,7 +275,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 				Vector3& p1 = circleProj[i - 1];
 				Vector3& p2 = circleProj[i];
 				if (DepthOK(p1.Z) && DepthOK(p2.Z))
-					dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(p2.X + 1.0f, p2.Y + 1.0f), shadowColor);
+					dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(p2.X + 1.0f, p2.Y + 1.0f), shadowColor, aThickness);
 			}
 		}
 
@@ -279,22 +284,22 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 			Vector3& p1 = circleProj[circleProj.size() - 1];
 			Vector3& p2 = circleProj[0];
 			if (DepthOK(p1.Z) && DepthOK(p2.Z))
-				dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(p2.X + 1.0f, p2.Y + 1.0f), shadowColor);
+				dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(p2.X + 1.0f, p2.Y + 1.0f), shadowColor, aThickness);
 		}
 		else /*if (aShowFlanks)*/
 		{
 			Vector3& p1 = circleProj[circleProj.size() - 1];
 			Vector3& p2 = circleProj[0];
 			if (DepthOK(p1.Z) && DepthOK(p2.Z))
-				dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(rightFlank.X + 1.0f, rightFlank.Y + 1.0f), shadowColor);
+				dl->AddLine(ImVec2(p1.X + 1.0f, p1.Y + 1.0f), ImVec2(rightFlank.X + 1.0f, rightFlank.Y + 1.0f), shadowColor, aThickness);
 		}
 
 		if (aShowFlanks)
 		{
 			if (DepthOK(rightFlank.Z) && DepthOK(origin.Z))
-				dl->AddLine(ImVec2(rightFlank.X + 1.0f, rightFlank.Y + 1.0f), ImVec2(origin.X + 1.0f, origin.Y + 1.0f), shadowColor);
+				dl->AddLine(ImVec2(rightFlank.X + 1.0f, rightFlank.Y + 1.0f), ImVec2(origin.X + 1.0f, origin.Y + 1.0f), shadowColor, aThickness);
 			if (DepthOK(leftFlank.Z) && DepthOK(origin.Z))
-				dl->AddLine(ImVec2(leftFlank.X + 1.0f, leftFlank.Y + 1.0f), ImVec2(origin.X + 1.0f, origin.Y + 1.0f), shadowColor);
+				dl->AddLine(ImVec2(leftFlank.X + 1.0f, leftFlank.Y + 1.0f), ImVec2(origin.X + 1.0f, origin.Y + 1.0f), shadowColor, aThickness);
 		}
 	}
 
@@ -306,7 +311,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 			Vector3& p1 = circleProj[i - 1];
 			Vector3& p2 = circleProj[i];
 			if (DepthOK(p1.Z) && DepthOK(p2.Z))
-				dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(p2.X, p2.Y), aColor);
+				dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(p2.X, p2.Y), aColor, aThickness);
 		}
 	}
 
@@ -315,22 +320,22 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 		Vector3& p1 = circleProj[circleProj.size() - 1];
 		Vector3& p2 = circleProj[0];
 		if (DepthOK(p1.Z) && DepthOK(p2.Z))
-			dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(p2.X, p2.Y), aColor);
+			dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(p2.X, p2.Y), aColor, aThickness);
 	}
 	else /*if (aShowFlanks)*/
 	{
 		Vector3& p1 = circleProj[circleProj.size() - 1];
 		Vector3& p2 = circleProj[0];
 		if (DepthOK(p1.Z) && DepthOK(p2.Z))
-			dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(rightFlank.X, rightFlank.Y), aColor);
+			dl->AddLine(ImVec2(p1.X, p1.Y), ImVec2(rightFlank.X, rightFlank.Y), aColor, aThickness);
 	}
 
 	if (aShowFlanks)
 	{
 		if (DepthOK(rightFlank.Z) && DepthOK(origin.Z))
-			dl->AddLine(ImVec2(rightFlank.X, rightFlank.Y), ImVec2(origin.X, origin.Y), aColor);
+			dl->AddLine(ImVec2(rightFlank.X, rightFlank.Y), ImVec2(origin.X, origin.Y), aColor, aThickness);
 		if (DepthOK(leftFlank.Z) && DepthOK(origin.Z))
-			dl->AddLine(ImVec2(leftFlank.X, leftFlank.Y), ImVec2(origin.X, origin.Y), aColor);
+			dl->AddLine(ImVec2(leftFlank.X, leftFlank.Y), ImVec2(origin.X, origin.Y), aColor, aThickness);
 	}
 }
 
@@ -394,14 +399,14 @@ void AddonRender()
 			radius = 80.0f;
 			break;
 		}
-		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, 360, true, true);
+		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, 360, 1, true, true);
 	}
 
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
 		if (!ri.IsVisible) { continue; }
 
-		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, true, false);
+		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false);
 	}
 }
 
@@ -455,7 +460,7 @@ void AddonOptions()
 
 	int indexRemove = -1;
 
-	ImGui::BeginTable("#rangeindicatorslist", 7, ImGuiTableFlags_SizingFixedFit);
+	ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
 
 	ImGui::TableNextRow();
 
@@ -467,6 +472,9 @@ void AddonOptions()
 
 	ImGui::TableSetColumnIndex(4);
 	ImGui::Text("Vertical Offset");
+
+	ImGui::TableSetColumnIndex(5);
+	ImGui::Text("Thickness");
 
 	std::lock_guard<std::mutex> lock(Settings::RangesMutex);
 	for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
@@ -489,7 +497,7 @@ void AddonOptions()
 			Settings::Save(SettingsPath);
 		}
 
-		float inputWidth = ImGui::GetWindowContentRegionWidth() / 4;
+		float inputWidth = ImGui::GetWindowContentRegionWidth() / 5;
 
 		ImGui::TableSetColumnIndex(2);
 		ImGui::PushItemWidth(inputWidth);
@@ -505,6 +513,10 @@ void AddonOptions()
 		if (ImGui::InputFloat(("##Arc" + std::to_string(i)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
 		{
 			bool sort = true;
+
+			if (ri.Arc < 0) { ri.Arc = 0; }
+			if (ri.Arc > 360) { ri.Arc = 360; }
+
 			Settings::Settings[RANGE_INDICATORS][i]["Arc"] = ri.Arc;
 			Settings::Save(SettingsPath);
 		}
@@ -518,6 +530,17 @@ void AddonOptions()
 		}
 
 		ImGui::TableSetColumnIndex(5);
+		ImGui::PushItemWidth(inputWidth);
+		if (ImGui::InputFloat(("##Thickness" + std::to_string(i)).c_str(), &ri.Thickness, 1.0f, 1.0f, "%.0f"))
+		{
+			if (ri.Thickness < 1) { ri.Thickness = 1; }
+			if (ri.Thickness > 25) { ri.Thickness = 25; }
+
+			Settings::Settings[RANGE_INDICATORS][i]["Thickness"] = ri.Thickness;
+			Settings::Save(SettingsPath);
+		}
+
+		ImGui::TableSetColumnIndex(6);
 		if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
 		{
 			indexRemove = i;
@@ -535,12 +558,13 @@ void AddonOptions()
 
 	if (ImGui::SmallButton("Add"))
 	{
-		Settings::RangeIndicators.push_back(RangeIndicator{ 0xFFFFFFFF, 0, true });
+		Settings::RangeIndicators.push_back(RangeIndicator{ 0xFFFFFFFF, 360, true, 0, 1 });
 		json jRi{};
 		jRi["RGBA"] = 0xFFFFFFFF;
-		jRi["Radius"] = 0;
+		jRi["Radius"] = 360;
 		jRi["IsVisible"] = true;
 		jRi["VOffset"] = 0;
+		jRi["Thickness"] = 1;
 		Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 		Settings::Save(SettingsPath);
 	}
