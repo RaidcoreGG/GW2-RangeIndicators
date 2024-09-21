@@ -497,7 +497,7 @@ void AddonOptions()
 			Settings::Save(SettingsPath);
 		}
 
-		float inputWidth = ImGui::GetWindowContentRegionWidth() / 5;
+		float inputWidth = ImGui::GetWindowContentRegionWidth() / 6;
 
 		ImGui::TableSetColumnIndex(2);
 		ImGui::PushItemWidth(inputWidth);
