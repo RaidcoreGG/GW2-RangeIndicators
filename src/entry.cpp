@@ -24,6 +24,7 @@ void OnMumbleIdentityUpdated(void* aEventArgs);
 void AddonRender();
 void AddonOptions();
 void AddonShortcut();
+void DrawListOfRangeIndicators();
 
 AddonDefinition AddonDef			= {};
 HMODULE hSelf						= nullptr;
@@ -535,7 +536,11 @@ void AddonOptions()
 	}
 
 	ImGui::Separator();
-	
+    DrawListOfRangeIndicators();
+}
+
+void DrawListOfRangeIndicators()
+{	
 	int indexRemove = -1;
 
 	ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
