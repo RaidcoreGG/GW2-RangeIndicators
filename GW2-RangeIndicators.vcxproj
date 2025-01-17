@@ -98,6 +98,7 @@ CALL $(SolutionDir)Scripts\version.bat</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\Specializations.h" />
     <ClInclude Include="src\imgui\imconfig.h" />
     <ClInclude Include="src\imgui\imgui.h" />
     <ClInclude Include="src\imgui\imgui_internal.h" />
@@ -113,6 +114,7 @@ CALL $(SolutionDir)Scripts\version.bat</Command>
     <ClInclude Include="src\Version.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Specializations.cpp" />
     <ClCompile Include="src\entry.cpp" />
     <ClCompile Include="src\imgui\imgui.cpp" />
     <ClCompile Include="src\imgui\imgui_demo.cpp" />

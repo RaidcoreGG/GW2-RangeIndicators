@@ -13,6 +13,8 @@
 #include "Settings.h"
 #include "Shared.h"
 
+#include "Specializations.h"
+
 namespace dx = DirectX;
 
 void AddonLoad(AddonAPI* aApi);
@@ -370,7 +372,7 @@ void AddonRender()
 
 	ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-	if (Settings::IsHitboxVisible)
+	if (Settings::IsHitboxVisible && (Settings::AlwaysShowHitbox || (Settings::InCombatOnly && MumbleLink->Context.IsInCombat)))
 	{
 		float radius = 24.0f; // normal player
 		switch (MumbleLink->Context.MountIndex)
@@ -401,6 +403,8 @@ void AddonRender()
 		}
 		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, 360, 1, true, true);
 	}
+
+	if (Settings::InCombatOnly && !MumbleLink->Context.IsInCombat) { return; }
 
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
@@ -438,6 +442,12 @@ void AddonOptions()
 		Settings::Save(SettingsPath);
 	}
 
+	if (ImGui::Checkbox("Only show in combat##Global", &Settings::InCombatOnly))
+	{
+		Settings::Settings[IN_COMBAT_ONLY] = Settings::InCombatOnly;
+		Settings::Save(SettingsPath);
+	}
+
 	ImGui::Separator();
 
 	ImGui::TextDisabled("Hitbox");
@@ -446,6 +456,15 @@ void AddonOptions()
 	{
 		Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
 		Settings::Save(SettingsPath);
+	}
+
+	if (Settings::IsHitboxVisible && Settings::InCombatOnly)
+	{
+		if (ImGui::Checkbox("Always show hitbox##Hitbox", &Settings::AlwaysShowHitbox))
+		{
+			Settings::Settings[ALWAYS_SHOW_HITBOX] = Settings::AlwaysShowHitbox;
+			Settings::Save(SettingsPath);
+		}
 	}
 
 	if (ImGui::ColorEdit4U32("##Hitbox", &Settings::HitboxRGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))

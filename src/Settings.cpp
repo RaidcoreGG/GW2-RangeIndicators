@@ -6,7 +6,9 @@
 #include <fstream>
 
 const char* IS_VISIBLE = "IsVisible";
+const char* IN_COMBAT_ONLY = "InCombatOnly";
 const char* IS_HITBOX_VISIBLE = "IsHitboxVisible";
+const char* ALWAYS_SHOW_HITBOX = "AlwaysShowHitbox";
 const char* HITBOX_RGBA = "HitboxRGBA";
 const char* RANGE_INDICATORS = "RangeIndicators";
 
@@ -110,6 +112,11 @@ namespace Settings
 			Settings[IS_VISIBLE].get_to<bool>(IsVisible);
 		}
 
+		if (!Settings[IN_COMBAT_ONLY].is_null())
+		{
+			Settings[IN_COMBAT_ONLY].get_to<bool>(InCombatOnly);
+		}
+
 		if (!Settings[IS_HITBOX_VISIBLE].is_null())
 		{
 			Settings[IS_HITBOX_VISIBLE].get_to<bool>(IsHitboxVisible);
@@ -175,7 +182,9 @@ namespace Settings
 	}
 
 	bool IsVisible = true;
+	bool InCombatOnly = false;
 	bool IsHitboxVisible = true;
+	bool AlwaysShowHitbox = false;
 	unsigned int HitboxRGBA = 0xFFFFFFFF;
 	std::vector<RangeIndicator> RangeIndicators;
 }

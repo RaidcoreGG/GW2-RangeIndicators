@@ -18,7 +18,9 @@ struct RangeIndicator
 };
 
 extern const char* IS_VISIBLE;
+extern const char* IN_COMBAT_ONLY;
 extern const char* IS_HITBOX_VISIBLE;
+extern const char* ALWAYS_SHOW_HITBOX;
 extern const char* HITBOX_RGBA;
 extern const char* RANGE_INDICATORS;
 
@@ -34,7 +36,9 @@ namespace Settings
 	void Save(std::filesystem::path aPath);
 
 	extern bool IsVisible;
+	extern bool InCombatOnly;
 	extern bool IsHitboxVisible;
+	extern bool AlwaysShowHitbox;
 	extern unsigned int HitboxRGBA;
 	extern std::vector<RangeIndicator> RangeIndicators;
 }
