@@ -567,23 +567,26 @@ void DrawListOfRangeIndicators()
         sortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
     }
 
-    ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
+    ImGui::BeginTable("#rangeindicatorslist", 9, ImGuiTableFlags_SizingFixedFit);
 
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(2);
-    ImGui::Text("Radius");
+    ImGui::Text("Name");
 
     ImGui::TableSetColumnIndex(3);
-    ImGui::Text("Arc");
+    ImGui::Text("Radius");
 
     ImGui::TableSetColumnIndex(4);
-    ImGui::Text("Vertical Offset");
+    ImGui::Text("Arc");
 
     ImGui::TableSetColumnIndex(5);
-    ImGui::Text("Thickness");
+    ImGui::Text("Vert. Offset");
 
     ImGui::TableSetColumnIndex(6);
+    ImGui::Text("Thickness");
+
+    ImGui::TableSetColumnIndex(7);
     ImGui::Text("Specialization");
 
     std::lock_guard<std::mutex> lock(Settings::RangesMutex);
@@ -611,7 +614,7 @@ void DrawListOfRangeIndicators()
                 
                 if (currentCore != lastCore) {
                     ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(6);
+                    ImGui::TableSetColumnIndex(7);
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                     ImGui::Text("%s", currentCore.c_str());
                     ImGui::PopStyleColor();
@@ -619,7 +622,7 @@ void DrawListOfRangeIndicators()
                 lastCore = currentCore;
             } else if (lastCore != "") {
                 ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(6);
+                ImGui::TableSetColumnIndex(7);
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::Text("General");
                 ImGui::PopStyleColor();
@@ -634,23 +637,41 @@ void DrawListOfRangeIndicators()
         {
             editInfo = {originalIndex, ri, true};
         }
+        float checkboxWidth = ImGui::CalcItemWidth();
 
         ImGui::TableSetColumnIndex(1);
         if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(originalIndex)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
         {
             editInfo = {originalIndex, ri, true};
         }
+        float colorEditWidth = ImGui::CalcItemWidth();
 
-        float inputWidth = ImGui::GetWindowContentRegionWidth() / 6;
+		// Calculate remove button width first
+    	float removeButtonWidth = ImGui::CalcTextSize("Remove").x + ImGui::GetStyle().FramePadding.x * 4;
+        // Calculate remaining width for other columns
+        float remainingWidth = ImGui::GetWindowContentRegionWidth() - checkboxWidth - colorEditWidth - removeButtonWidth;
+        float inputWidth = remainingWidth / 6; // 6 columns (Name, Radius, Arc, VOffset, Thickness, Spec)
+
+        // Use these widths for the input columns...
 
         ImGui::TableSetColumnIndex(2);
+        ImGui::PushItemWidth(inputWidth);
+        char nameBuf[MAX_NAME_LENGTH + 1];  // +1 for null terminator
+        strncpy_s(nameBuf, ri.Name.c_str(), MAX_NAME_LENGTH);
+        if (ImGui::InputText(("##Name" + std::to_string(originalIndex)).c_str(), nameBuf, sizeof(nameBuf)))
+        {
+            ri.Name = nameBuf;
+            editInfo = {originalIndex, ri, true};
+        }
+
+        ImGui::TableSetColumnIndex(3);
         ImGui::PushItemWidth(inputWidth);
         if (ImGui::InputFloat(("##Radius" + std::to_string(originalIndex)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
         {
             editInfo = {originalIndex, ri, true};
         }
 
-        ImGui::TableSetColumnIndex(3);
+        ImGui::TableSetColumnIndex(4);
         ImGui::PushItemWidth(inputWidth);
         if (ImGui::InputFloat(("##Arc" + std::to_string(originalIndex)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
         {
@@ -659,15 +680,15 @@ void DrawListOfRangeIndicators()
             editInfo = {originalIndex, ri, true};
         }
 
-        ImGui::TableSetColumnIndex(4);
-        ImGui::PushItemWidth(inputWidth);
+        ImGui::TableSetColumnIndex(5);
+        ImGui::PushItemWidth(inputWidth*0.75f);
         if (ImGui::InputFloat(("##VOffset" + std::to_string(originalIndex)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
         {
             editInfo = {originalIndex, ri, true};
         }
 
-        ImGui::TableSetColumnIndex(5);
-        ImGui::PushItemWidth(inputWidth);
+        ImGui::TableSetColumnIndex(6);
+        ImGui::PushItemWidth(inputWidth*0.75f);
         if (ImGui::InputFloat(("##Thickness" + std::to_string(originalIndex)).c_str(), &ri.Thickness, 1.0f, 1.0f, "%.0f"))
         {
             if (ri.Thickness < 1) { ri.Thickness = 1; }
@@ -675,7 +696,7 @@ void DrawListOfRangeIndicators()
             editInfo = {originalIndex, ri, true};
         }
 
-        ImGui::TableSetColumnIndex(6);
+        ImGui::TableSetColumnIndex(7);
         ImGui::PushItemWidth(inputWidth);
         if (ImGui::BeginCombo(("##Specialization" + std::to_string(originalIndex)).c_str(), ri.Specialization.c_str()))
         {
@@ -692,7 +713,8 @@ void DrawListOfRangeIndicators()
             ImGui::EndCombo();
         }
 
-        ImGui::TableSetColumnIndex(7);
+        ImGui::TableSetColumnIndex(8);
+		ImGui::PushItemWidth(removeButtonWidth);
         if (ImGui::SmallButton(("Remove##" + std::to_string(originalIndex)).c_str()))
         {
             indexRemove = originalIndex;
@@ -715,6 +737,7 @@ void DrawListOfRangeIndicators()
         Settings::RangeIndicators[editInfo.index] = editInfo.indicator;
         json& jRi = Settings::Settings[RANGE_INDICATORS][editInfo.index];
         jRi["RGBA"] = editInfo.indicator.RGBA;
+        jRi["Name"] = editInfo.indicator.Name;
         jRi["Radius"] = editInfo.indicator.Radius;
         jRi["Arc"] = editInfo.indicator.Arc;
         jRi["IsVisible"] = editInfo.indicator.IsVisible;
@@ -726,10 +749,11 @@ void DrawListOfRangeIndicators()
 
     if (ImGui::SmallButton("Add"))
     {
-        RangeIndicator ri{ 0xFFFFFFFF, 360, true, 0, 360, 1, "ALL" };	
+        RangeIndicator ri{ 0xFFFFFFFF, 360, true, 0, 360, 1, "ALL", "" };
         Settings::RangeIndicators.push_back(ri);
         json jRi{};
         jRi["RGBA"] = ri.RGBA;
+        jRi["Name"] = ri.Name;
         jRi["Radius"] = ri.Radius;
         jRi["Arc"] = ri.Arc;
         jRi["IsVisible"] = ri.IsVisible;
@@ -777,7 +801,10 @@ void AddonShortcut()
                         }
                     }
 
-                    if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &Settings::RangeIndicators[originalIndex].IsVisible))
+                    if (ImGui::Checkbox((ri.Name.empty() ? 
+                        std::to_string(static_cast<int>(ri.Radius)) : 
+                        ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius)) + ")").c_str(), 
+                        &Settings::RangeIndicators[originalIndex].IsVisible))
                     {
                         Settings::Settings[RANGE_INDICATORS][originalIndex]["IsVisible"] = Settings::RangeIndicators[originalIndex].IsVisible;
                         Settings::Save(SettingsPath);
@@ -797,7 +824,10 @@ void AddonShortcut()
                         }
                     }
 
-                    if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
+                    if (ImGui::Checkbox((ri.Name.empty() ? 
+                        std::to_string(static_cast<int>(ri.Radius)) : 
+                        ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius)) + ")").c_str(), 
+                        &ri.IsVisible))
                     {
                         Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
                         Settings::Save(SettingsPath);

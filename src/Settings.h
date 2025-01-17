@@ -7,6 +7,8 @@
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
+constexpr size_t MAX_NAME_LENGTH = 127;  // 127 chars + null terminator = 128 bytes
+
 struct RangeIndicator
 {
 	unsigned int RGBA;
@@ -16,6 +18,7 @@ struct RangeIndicator
 	float Arc;
 	float Thickness;
 	std::string Specialization;
+	std::string Name;
 };
 
 extern const char* IS_VISIBLE;

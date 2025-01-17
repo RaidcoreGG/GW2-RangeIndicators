@@ -35,7 +35,8 @@ namespace Settings
 				0,
 				360,
 				1,
-				"ALL"
+				"ALL",
+				""
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -45,7 +46,8 @@ namespace Settings
 				0,
 				360,
 				1,
-				"ALL"
+				"ALL",
+				""
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -55,7 +57,8 @@ namespace Settings
 				0,
 				360,
 				1,
-				"ALL"
+				"ALL",
+				""
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -65,7 +68,8 @@ namespace Settings
 				0,
 				360,
 				1,
-				"ALL"
+				"ALL",
+				""
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -75,7 +79,8 @@ namespace Settings
 				0,
 				360,
 				1,
-				"ALL"
+				"ALL",
+				""
 			});
 
 			for (RangeIndicator& ri : Settings::RangeIndicators)
@@ -90,6 +95,7 @@ namespace Settings
 				jRi["Arc"] = ri.Arc;
 				jRi["Thickness"] = ri.Thickness;
 				jRi["Specialization"] = ri.Specialization;
+				jRi["Name"] = ri.Name;
 
 				Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 			}
@@ -150,46 +156,31 @@ namespace Settings
 			Settings[SORT_BY_PROFESSION].get_to<bool>(SortByProfession);
 		}
 
-		if (!Settings[RANGE_INDICATORS].is_null())
+		if (Settings.contains(RANGE_INDICATORS) && Settings[RANGE_INDICATORS].is_array())
 		{
-			std::lock_guard<std::mutex> lock(RangesMutex);
-			for (json ri : Settings[RANGE_INDICATORS])
+			for (const auto& jRi : Settings[RANGE_INDICATORS])
 			{
-				if (ri.is_null())
-				{
-					continue;
+				RangeIndicator ri;
+				ri.RGBA = jRi["RGBA"].get<unsigned int>();
+				ri.Radius = jRi["Radius"].get<float>();
+				ri.Arc = jRi["Arc"].get<float>();
+				ri.IsVisible = jRi["IsVisible"].get<bool>();
+				ri.VOffset = jRi["VOffset"].get<float>();
+				ri.Thickness = jRi["Thickness"].get<float>();
+				ri.Specialization = jRi["Specialization"].get<std::string>();
+				
+				// Handle Name field, which might not exist in older settings files
+				if (jRi.contains("Name")) {
+					std::string name = jRi["Name"].get<std::string>();
+					if (name.length() > MAX_NAME_LENGTH) {
+						name = name.substr(0, MAX_NAME_LENGTH);  // Leave room for null terminator
+					}
+					ri.Name = name;
+				} else {
+					ri.Name = "";  // Default to empty string if Name field doesn't exist
 				}
 
-				RangeIndicator rangeIndicator{};
-				if (!ri["RGBA"].is_null()) { ri["RGBA"].get_to(rangeIndicator.RGBA); }
-				if (!ri["Radius"].is_null()) { ri["Radius"].get_to(rangeIndicator.Radius); }
-				if (!ri["IsVisible"].is_null()) { ri["IsVisible"].get_to(rangeIndicator.IsVisible); }
-				if (!ri["VOffset"].is_null()) { ri["VOffset"].get_to(rangeIndicator.VOffset); }
-				if (!ri["Arc"].is_null()) { ri["Arc"].get_to(rangeIndicator.Arc); } else { rangeIndicator.Arc = 360; }
-				if (!ri["Thickness"].is_null()) { ri["Thickness"].get_to(rangeIndicator.Thickness); } else { rangeIndicator.Thickness = 1; }
-				if (!ri["Specialization"].is_null()) { ri["Specialization"].get_to(rangeIndicator.Specialization); }
-
-				RangeIndicators.push_back(rangeIndicator);
-			}
-
-			std::sort(RangeIndicators.begin(), RangeIndicators.end(), [](RangeIndicator lhs, RangeIndicator rhs)
-				{
-					return lhs.Radius < rhs.Radius;
-				});
-
-			Settings[RANGE_INDICATORS].clear();
-
-			for (RangeIndicator ri : RangeIndicators)
-			{
-				json jRi{};
-				jRi["RGBA"] = ri.RGBA;
-				jRi["Radius"] = ri.Radius;
-				jRi["IsVisible"] = ri.IsVisible;
-				jRi["VOffset"] = ri.VOffset;
-				jRi["Arc"] = ri.Arc;
-				jRi["Thickness"] = ri.Thickness;
-				jRi["Specialization"] = ri.Specialization;
-				Settings[RANGE_INDICATORS].push_back(jRi);
+				RangeIndicators.push_back(ri);
 			}
 		}
 
