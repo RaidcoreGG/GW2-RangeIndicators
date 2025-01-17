@@ -216,7 +216,14 @@ namespace Settings
 				ri.IsVisible = jRi["IsVisible"].get<bool>();
 				ri.VOffset = jRi["VOffset"].get<float>();
 				ri.Thickness = jRi["Thickness"].get<float>();
-				ri.Specialization = jRi["Specialization"].get<std::string>();
+
+				// Handle Specialization field, which might not exist in older settings files
+				if (jRi.contains("Specialization")) {
+					ri.Specialization = jRi["Specialization"].get<std::string>();
+				}
+				else {
+					ri.Specialization = "ALL";
+				}
 
 				// Handle Name field, which might not exist in older settings files
 				if (jRi.contains("Name")) {
