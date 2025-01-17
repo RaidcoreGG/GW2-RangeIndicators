@@ -86,7 +86,10 @@ void AddonLoad(AddonAPI* aApi)
 	APIDefs->RegisterRender(ERenderType_Render, AddonRender);
 	APIDefs->RegisterRender(ERenderType_OptionsRender, AddonOptions);
 
-	APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
+	if (Settings::ShortcutMenuEnabled)
+	{
+		APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
+	}
 
 	APIDefs->RegisterKeybindWithString("KB_RI_TOGGLEVISIBLE", ProcessKeybinds, "(null)");
 
@@ -497,7 +500,8 @@ void AddonOptions()
 		Settings::Save(SettingsPath);
 	}
 
-	if (Settings::IsHitboxVisible && Settings::InCombatOnly){
+	if (Settings::IsHitboxVisible && Settings::InCombatOnly)
+	{
 		ImGui::SameLine();
 		if (ImGui::Checkbox("Always show hitbox##Hitbox", &Settings::AlwaysShowHitbox))
 		{
@@ -506,8 +510,7 @@ void AddonOptions()
 		}
 		ImGui::ShowDelayedTooltipOnHover(
 			"Show hitbox even when not in combat, this setting is only used when 'Only show in combat' is enabled",
-			1.0f
-		);
+			1.0f);
 	}
 
 	if (ImGui::ColorEdit4U32("##Hitbox", &Settings::HitboxRGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
@@ -522,7 +525,7 @@ void AddonOptions()
 
 	ImGui::TextDisabled("Specializations");
 
-	if (ImGui::Checkbox("Filter specialization", &Settings::FilterSpecialization))
+	if (ImGui::Checkbox("Filter specialization##Specializations", &Settings::FilterSpecialization))
 	{
 		Settings::Settings[FILTER_SPECIALIZATION] = Settings::FilterSpecialization;
 		Settings::Save(SettingsPath);
@@ -532,14 +535,14 @@ void AddonOptions()
 	if (Settings::FilterSpecialization)
 	{
 		ImGui::SameLine();
-		if (ImGui::Checkbox("Show core on all specs", &Settings::FilterProfession))
+		if (ImGui::Checkbox("Show core on all specs##Specializations", &Settings::FilterProfession))
 		{
 			Settings::Settings[FILTER_PROFESSION] = Settings::FilterProfession;
 			Settings::Save(SettingsPath);
 		}
 		ImGui::ShowDelayedTooltipOnHover("Show range indicators for your core profession on all specs", 1.0f);
 		ImGui::SameLine();
-		if (ImGui::Checkbox("Sort list by profession", &Settings::SortByProfession))
+		if (ImGui::Checkbox("Sort list by profession##Specializations", &Settings::SortByProfession))
 		{
 			Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
 			Settings::Save(SettingsPath);
@@ -548,7 +551,75 @@ void AddonOptions()
 	}
 
 	ImGui::Separator();
-    DrawListOfRangeIndicators();
+
+	ImGui::TextDisabled("Shortcut Menu");
+
+	if (ImGui::Checkbox("Enabled##Shortcuts", &Settings::ShortcutMenuEnabled))
+	{
+		Settings::Settings[SHORTCUT_MENU_ENABLED] = Settings::ShortcutMenuEnabled;
+		Settings::Save(SettingsPath);
+
+		if (!Settings::ShortcutMenuEnabled)
+		{
+			APIDefs->RemoveSimpleShortcut("QAS_RANGEINDICATORS");
+		}
+		if (Settings::ShortcutMenuEnabled)
+		{
+			APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
+		}
+	}
+	ImGui::ShowDelayedTooltipOnHover("Enable the shortcut menu", 1.0f);
+
+	if (Settings::ShortcutMenuEnabled)
+	{
+		if (ImGui::Checkbox("Hitbox Toggle##Shortcuts", &Settings::HitboxToggle))
+		{
+			Settings::Settings[SHORTCUT_HITBOX_TOGGLE] = Settings::HitboxToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put hitbox toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Combat Toggle##Shortcuts", &Settings::CombatToggle))
+		{
+			Settings::Settings[SHORTCUT_COMBAT_TOGGLE] = Settings::CombatToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put only show in combat toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Always show hitbox Toggle##Shortcuts", &Settings::AlwaysShowHitboxToggle))
+		{
+			Settings::Settings[SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE] = Settings::AlwaysShowHitboxToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put always show hitbox toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Filter specialization Toggle##Shortcuts", &Settings::FilterSpecializationToggle))
+		{
+			Settings::Settings[SHORTCUT_FILTER_SPECIALIZATION_TOGGLE] = Settings::FilterSpecializationToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put filter specialization toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Show core on all specs Toggle##Shortcuts", &Settings::FilterProfessionToggle))
+		{
+			Settings::Settings[SHORTCUT_FILTER_PROFESSION_TOGGLE] = Settings::FilterProfessionToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put show core on all specs toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Sort list by profession Toggle##Shortcuts", &Settings::SortByProfessionToggle))
+		{
+			Settings::Settings[SHORTCUT_SORT_BY_PROFESSION_TOGGLE] = Settings::SortByProfessionToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put sort list by profession toggle in the shortcut menu", 1.0f);
+	}
+
+	ImGui::Separator();
+
+	ImGui::TextDisabled("Range Indicators");
+
+	DrawListOfRangeIndicators();
 }
 
 void DrawListOfRangeIndicators()
@@ -775,18 +846,59 @@ void AddonShortcut()
             Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
             Settings::Save(SettingsPath);
         }
+			if (Settings::CombatToggle && ImGui::Checkbox("Only show in combat##Global", &Settings::InCombatOnly))
+			{
+				Settings::Settings[IN_COMBAT_ONLY] = Settings::InCombatOnly;
+				Settings::Save(SettingsPath);
+			}
 
-        if (Settings::IsVisible)
+		if (Settings::IsVisible)
         {
             ImGui::Separator();
 
-            if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
+            if (Settings::HitboxToggle && ImGui::Checkbox("Hitbox##Hitbox", &Settings::IsHitboxVisible))
             {
                 Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
                 Settings::Save(SettingsPath);
             }
 
-            std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+			if (Settings::AlwaysShowHitboxToggle && Settings::IsHitboxVisible && Settings::InCombatOnly)
+			{
+				ImGui::SameLine();
+				if (ImGui::Checkbox("Always show##Hitbox", &Settings::AlwaysShowHitbox))
+				{
+					Settings::Settings[ALWAYS_SHOW_HITBOX] = Settings::AlwaysShowHitbox;
+					Settings::Save(SettingsPath);
+				}
+			}
+
+            ImGui::Separator();
+
+			if (Settings::FilterSpecializationToggle && ImGui::Checkbox("Filter Spec##Specializations", &Settings::FilterSpecialization))
+			{
+				Settings::Settings[FILTER_SPECIALIZATION] = Settings::FilterSpecialization;
+				Settings::Save(SettingsPath);
+			}
+
+			if (Settings::FilterSpecialization)
+			{
+				ImGui::SameLine();
+				if (Settings::FilterProfessionToggle && ImGui::Checkbox("Show All##Specializations", &Settings::FilterProfession))
+				{
+					Settings::Settings[FILTER_PROFESSION] = Settings::FilterProfession;
+					Settings::Save(SettingsPath);
+				}
+				ImGui::SameLine();
+				if (Settings::SortByProfessionToggle && ImGui::Checkbox("Sort List##Specializations", &Settings::SortByProfession))
+				{
+					Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
+					Settings::Save(SettingsPath);
+				}
+			}
+
+            ImGui::Separator();
+
+			std::lock_guard<std::mutex> lock(Settings::RangesMutex);
             
             if (Settings::SortByProfession) {
                 auto sortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
@@ -801,9 +913,35 @@ void AddonShortcut()
                         }
                     }
 
-                    if (ImGui::Checkbox((ri.Name.empty() ? 
-                        std::to_string(static_cast<int>(ri.Radius)) : 
-                        ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius)) + ")").c_str(), 
+                    // Create the label text
+                    std::string label;
+                    if (!ri.Name.empty()) {
+                        label = ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius));
+                        if (ri.Arc != 360) {
+                            label += "/" + std::to_string(static_cast<int>(ri.Arc));
+                        }
+                        label += ")";
+                    } else {
+                        label = ri.Specialization + " (" + std::to_string(static_cast<int>(ri.Radius));
+                        if (ri.Arc != 360) {
+                            label += "/" + std::to_string(static_cast<int>(ri.Arc));
+                        }
+                        label += ")";
+                    }
+
+                    // Draw colored square
+                    float squareSize = ImGui::GetFrameHeight();  // Match checkbox size
+                    ImVec2 pos = ImGui::GetCursorScreenPos();
+                    ImGui::Dummy(ImVec2(squareSize, squareSize));  // Reserve space
+                    ImGui::GetWindowDrawList()->AddRectFilled(
+                        pos,
+                        ImVec2(pos.x + squareSize, pos.y + squareSize),
+                        ri.RGBA
+                    );
+                    ImGui::SameLine();
+                    
+                    // Checkbox with label
+                    if (ImGui::Checkbox((label + "##" + std::to_string(originalIndex)).c_str(), 
                         &Settings::RangeIndicators[originalIndex].IsVisible))
                     {
                         Settings::Settings[RANGE_INDICATORS][originalIndex]["IsVisible"] = Settings::RangeIndicators[originalIndex].IsVisible;
@@ -824,9 +962,35 @@ void AddonShortcut()
                         }
                     }
 
-                    if (ImGui::Checkbox((ri.Name.empty() ? 
-                        std::to_string(static_cast<int>(ri.Radius)) : 
-                        ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius)) + ")").c_str(), 
+                    // Create the label text
+                    std::string label;
+                    if (!ri.Name.empty()) {
+                        label = ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius));
+                        if (ri.Arc != 360) {
+                            label += "/" + std::to_string(static_cast<int>(ri.Arc));
+                        }
+                        label += ")";
+                    } else {
+                        label = ri.Specialization + " (" + std::to_string(static_cast<int>(ri.Radius));
+                        if (ri.Arc != 360) {
+                            label += "/" + std::to_string(static_cast<int>(ri.Arc));
+                        }
+                        label += ")";
+                    }
+
+                    // Draw colored square
+                    float squareSize = ImGui::GetFrameHeight();  // Match checkbox size
+                    ImVec2 pos = ImGui::GetCursorScreenPos();
+                    ImGui::Dummy(ImVec2(squareSize, squareSize));  // Reserve space
+                    ImGui::GetWindowDrawList()->AddRectFilled(
+                        pos,
+                        ImVec2(pos.x + squareSize, pos.y + squareSize),
+                        ri.RGBA
+                    );
+                    ImGui::SameLine();
+                    
+                    // Checkbox with label
+                    if (ImGui::Checkbox((label + "##" + std::to_string(i)).c_str(), 
                         &ri.IsVisible))
                     {
                         Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;

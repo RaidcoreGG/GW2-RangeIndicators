@@ -31,6 +31,16 @@ extern const char* FILTER_SPECIALIZATION;
 extern const char* FILTER_PROFESSION;
 extern const char* SORT_BY_PROFESSION;
 
+// Shortcuts
+extern const char* SHORTCUT_MENU_ENABLED;
+extern const char* SHORTCUT_COMBAT_TOGGLE;
+extern const char* SHORTCUT_HITBOX_TOGGLE;
+extern const char* SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE;
+extern const char* SHORTCUT_FILTER_SPECIALIZATION_TOGGLE;
+extern const char* SHORTCUT_FILTER_PROFESSION_TOGGLE;
+extern const char* SHORTCUT_SORT_BY_PROFESSION_TOGGLE;
+
+
 namespace Settings
 {
 	extern std::mutex	Mutex;
@@ -51,6 +61,15 @@ namespace Settings
 	extern bool FilterProfession;
 	extern bool SortByProfession;
 	extern std::vector<RangeIndicator> RangeIndicators;
+
+	// Shortcuts
+	extern bool ShortcutMenuEnabled;
+	extern bool CombatToggle;
+	extern bool HitboxToggle;
+	extern bool AlwaysShowHitboxToggle;
+	extern bool FilterSpecializationToggle;
+	extern bool FilterProfessionToggle;
+	extern bool SortByProfessionToggle;
 }
 
 #endif

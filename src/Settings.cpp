@@ -14,6 +14,16 @@ const char* RANGE_INDICATORS = "RangeIndicators";
 const char* FILTER_SPECIALIZATION = "FilterSpecialization";
 const char* FILTER_PROFESSION = "FilterProfession";
 const char* SORT_BY_PROFESSION = "SortByProfession";
+
+// Shortcuts
+const char* SHORTCUT_MENU_ENABLED = "ShortcutMenuEnabled";
+const char* SHORTCUT_COMBAT_TOGGLE = "CombatToggle";
+const char* SHORTCUT_HITBOX_TOGGLE = "HitboxToggle";
+const char* SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE = "AlwaysShowHitboxToggle";
+const char* SHORTCUT_FILTER_SPECIALIZATION_TOGGLE = "FilterSpecializationToggle";
+const char* SHORTCUT_FILTER_PROFESSION_TOGGLE = "FilterProfessionToggle";
+const char* SHORTCUT_SORT_BY_PROFESSION_TOGGLE = "SortByProfessionToggle";
+
 namespace Settings
 {
 	std::mutex	Mutex;
@@ -121,6 +131,7 @@ namespace Settings
 			}
 		}
 
+		// General settings
 		if (!Settings[IS_VISIBLE].is_null())
 		{
 			Settings[IS_VISIBLE].get_to<bool>(IsVisible);
@@ -155,6 +166,44 @@ namespace Settings
 		{
 			Settings[SORT_BY_PROFESSION].get_to<bool>(SortByProfession);
 		}
+
+		// Shortcuts
+		if (!Settings[SHORTCUT_MENU_ENABLED].is_null())
+		{
+			Settings[SHORTCUT_MENU_ENABLED].get_to<bool>(ShortcutMenuEnabled);
+		}
+
+		if (!Settings[SHORTCUT_COMBAT_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_COMBAT_TOGGLE].get_to<bool>(CombatToggle);
+		}
+
+		if (!Settings[SHORTCUT_HITBOX_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_HITBOX_TOGGLE].get_to<bool>(HitboxToggle);
+		}
+
+		if (!Settings[SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE].get_to<bool>(AlwaysShowHitboxToggle);
+		}
+
+		if (!Settings[SHORTCUT_FILTER_SPECIALIZATION_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_FILTER_SPECIALIZATION_TOGGLE].get_to<bool>(FilterSpecializationToggle);
+		}
+
+		if (!Settings[SHORTCUT_FILTER_PROFESSION_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_FILTER_PROFESSION_TOGGLE].get_to<bool>(FilterProfessionToggle);
+		}
+
+		if (!Settings[SHORTCUT_SORT_BY_PROFESSION_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_SORT_BY_PROFESSION_TOGGLE].get_to<bool>(SortByProfessionToggle);
+		}
+
+		// Range Indicators
 
 		if (Settings.contains(RANGE_INDICATORS) && Settings[RANGE_INDICATORS].is_array())
 		{
@@ -206,4 +255,13 @@ namespace Settings
 	bool FilterProfession = false;
 	bool SortByProfession = false;
 	std::vector<RangeIndicator> RangeIndicators;
+
+	// Shortcuts
+	bool ShortcutMenuEnabled = true;
+	bool CombatToggle = true;
+	bool HitboxToggle = true;
+	bool AlwaysShowHitboxToggle = false;
+	bool FilterSpecializationToggle = false;
+	bool FilterProfessionToggle = false;
+	bool SortByProfessionToggle = false;
 }
