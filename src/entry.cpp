@@ -441,6 +441,23 @@ namespace ImGui
 
 		return result;
 	}
+
+	void ShowDelayedTooltipOnHover(const char* tooltip, float delay)
+	{
+		static double hoverStartTime = -0.000001;
+		if (ImGui::IsItemHovered())
+		{
+			if (hoverStartTime < 0)
+				hoverStartTime = ImGui::GetTime();
+			
+			if (ImGui::GetTime() - hoverStartTime >= delay) // 1 second delay
+				ImGui::SetTooltip(tooltip);
+		}
+		else
+		{
+			hoverStartTime = -0.000001;
+		}
+	}
 }
 
 void AddonOptions()
@@ -467,13 +484,17 @@ void AddonOptions()
 		Settings::Save(SettingsPath);
 	}
 
-	if (Settings::IsHitboxVisible && Settings::InCombatOnly)
-	{
+	if (Settings::IsHitboxVisible && Settings::InCombatOnly){
+		ImGui::SameLine();
 		if (ImGui::Checkbox("Always show hitbox##Hitbox", &Settings::AlwaysShowHitbox))
 		{
 			Settings::Settings[ALWAYS_SHOW_HITBOX] = Settings::AlwaysShowHitbox;
 			Settings::Save(SettingsPath);
 		}
+		ImGui::ShowDelayedTooltipOnHover(
+			"Show hitbox even when not in combat, this setting is only used when 'Only show in combat' is enabled",
+			1.0f
+		);
 	}
 
 	if (ImGui::ColorEdit4U32("##Hitbox", &Settings::HitboxRGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
@@ -493,20 +514,24 @@ void AddonOptions()
 		Settings::Settings[FILTER_SPECIALIZATION] = Settings::FilterSpecialization;
 		Settings::Save(SettingsPath);
 	}
+	ImGui::ShowDelayedTooltipOnHover("Only show range indicators for your current specialization", 1.0f);
 
 	if (Settings::FilterSpecialization)
 	{
-		if (ImGui::Checkbox("Show profession on all specializations", &Settings::FilterProfession))
+		ImGui::SameLine();
+		if (ImGui::Checkbox("Show core on all specs", &Settings::FilterProfession))
 		{
 			Settings::Settings[FILTER_PROFESSION] = Settings::FilterProfession;
 			Settings::Save(SettingsPath);
 		}
-
-		if (ImGui::Checkbox("Sort range indicator list by profession", &Settings::SortByProfession))
+		ImGui::ShowDelayedTooltipOnHover("Show range indicators for your core profession on all specs", 1.0f);
+		ImGui::SameLine();
+		if (ImGui::Checkbox("Sort list by profession", &Settings::SortByProfession))
 		{
 			Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
 			Settings::Save(SettingsPath);
 		}
+		ImGui::ShowDelayedTooltipOnHover("Sort range indicators by profession", 1.0f);
 	}
 
 	ImGui::Separator();
