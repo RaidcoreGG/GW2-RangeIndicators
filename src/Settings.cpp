@@ -210,31 +210,88 @@ namespace Settings
 			for (const auto& jRi : Settings[RANGE_INDICATORS])
 			{
 				RangeIndicator ri;
-				ri.RGBA = jRi["RGBA"].get<unsigned int>();
-				ri.Radius = jRi["Radius"].get<float>();
-				ri.Arc = jRi["Arc"].get<float>();
-				ri.IsVisible = jRi["IsVisible"].get<bool>();
-				ri.VOffset = jRi["VOffset"].get<float>();
-				ri.Thickness = jRi["Thickness"].get<float>();
 
-				// Handle Specialization field, which might not exist in older settings files
-				if (jRi.contains("Specialization")) {
+				// Set defaults first
+				ri.RGBA = 0xFFFFFFFF;
+				ri.Radius = 360;
+				ri.Arc = 360;
+				ri.IsVisible = true;
+				ri.VOffset = 0;
+				ri.Thickness = 1;
+				ri.Specialization = "ALL";
+				ri.Name = "";
+
+				// Load values with null checks and type validation
+				if (!jRi["RGBA"].is_null()) {
+					try {
+						ri.RGBA = jRi["RGBA"].get<unsigned int>();
+					}
+					catch (...) {
+						APIDefs->Log(ELogLevel_WARNING, "RangeIndicators", "Invalid RGBA value in settings.json");
+					}
+				}
+
+				if (!jRi["Radius"].is_null()) {
+					try {
+						ri.Radius = jRi["Radius"].get<float>();
+					}
+					catch (...) {
+						APIDefs->Log(ELogLevel_WARNING, "RangeIndicators", "Invalid Radius value in settings.json");
+					}
+				}
+
+				if (!jRi["Arc"].is_null()) {
+					try {
+						ri.Arc = jRi["Arc"].get<float>();
+						if (ri.Arc < 0) { ri.Arc = 0; }
+						if (ri.Arc > 360) { ri.Arc = 360; }
+					}
+					catch (...) {
+						APIDefs->Log(ELogLevel_WARNING, "RangeIndicators", "Invalid Arc value in settings.json");
+					}
+				}
+
+				if (!jRi["IsVisible"].is_null()) {
+					try {
+						ri.IsVisible = jRi["IsVisible"].get<bool>();
+					}
+					catch (...) {
+						APIDefs->Log(ELogLevel_WARNING, "RangeIndicators", "Invalid IsVisible value in settings.json");
+					}
+				}
+
+				if (!jRi["VOffset"].is_null()) {
+					try {
+						ri.VOffset = jRi["VOffset"].get<float>();
+					}
+					catch (...) {
+						APIDefs->Log(ELogLevel_WARNING, "RangeIndicators", "Invalid VOffset value in settings.json");
+					}
+				}
+
+				if (!jRi["Thickness"].is_null()) {
+					try {
+						ri.Thickness = jRi["Thickness"].get<float>();
+						if (ri.Thickness < 1) { ri.Thickness = 1; }
+						if (ri.Thickness > 25) { ri.Thickness = 25; }
+					}
+					catch (...) {
+						APIDefs->Log(ELogLevel_WARNING, "RangeIndicators", "Invalid Thickness value in settings.json");
+					}
+				}
+
+				// Handle Specialization field
+				if (jRi.contains("Specialization") && !jRi["Specialization"].is_null()) {
 					ri.Specialization = jRi["Specialization"].get<std::string>();
 				}
-				else {
-					ri.Specialization = "ALL";
-				}
 
-				// Handle Name field, which might not exist in older settings files
-				if (jRi.contains("Name")) {
+				// Handle Name field
+				if (jRi.contains("Name") && !jRi["Name"].is_null()) {
 					std::string name = jRi["Name"].get<std::string>();
 					if (name.length() > MAX_NAME_LENGTH) {
-						name = name.substr(0, MAX_NAME_LENGTH);  // Leave room for null terminator
+						name = name.substr(0, MAX_NAME_LENGTH);
 					}
 					ri.Name = name;
-				}
-				else {
-					ri.Name = "";  // Default to empty string if Name field doesn't exist
 				}
 
 				RangeIndicators.push_back(ri);
