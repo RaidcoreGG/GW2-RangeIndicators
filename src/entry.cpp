@@ -422,8 +422,13 @@ void AddonRender()
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
 		if (!ri.IsVisible) { continue; }
+		// Skip if filtering is enabled and spec doesn't match
 		if (Settings::FilterSpecialization && ri.Specialization != spec) {
-			if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) { continue; }
+			if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) {
+				if (ri.Specialization != "ALL" && !ri.Specialization.empty()) {
+					continue;
+				}
+			}
 		}
 
 		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false);
