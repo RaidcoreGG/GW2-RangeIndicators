@@ -27,6 +27,7 @@ void AddonRender();
 void AddonOptions();
 void AddonShortcut();
 void DrawListOfRangeIndicators();
+std::vector<std::pair<int, RangeIndicator>> GetSortedIndicators(const std::vector<RangeIndicator>& indicators);
 
 AddonDefinition AddonDef			= {};
 HMODULE hSelf						= nullptr;
@@ -563,49 +564,7 @@ void DrawListOfRangeIndicators()
     // Create a sorted copy of the range indicators if sorting is enabled
     std::vector<std::pair<int, RangeIndicator>> sortedIndicators;
     if (Settings::SortByProfession) {
-        // Create pairs of original index and indicator
-        for (int i = 0; i < (int)Settings::RangeIndicators.size(); i++) {
-            sortedIndicators.push_back({i, Settings::RangeIndicators[i]});
-        }
-
-        // Sort the indicators
-        std::sort(sortedIndicators.begin(), sortedIndicators.end(), 
-            [&](const auto& a, const auto& b) {
-                const auto& ri1 = a.second;
-                const auto& ri2 = b.second;
-
-                // Put "ALL" at the very bottom
-                if (ri1.Specialization == "ALL") return false;
-                if (ri2.Specialization == "ALL") return true;
-
-                // Get core specs
-                std::string core1 = ri1.Specialization;
-                std::string core2 = ri2.Specialization;
-                if (Specializations::EliteSpecToCoreSpec(ri1.Specialization) != "Unknown") {
-                    core1 = Specializations::EliteSpecToCoreSpec(ri1.Specialization);
-                }
-                if (Specializations::EliteSpecToCoreSpec(ri2.Specialization) != "Unknown") {
-                    core2 = Specializations::EliteSpecToCoreSpec(ri2.Specialization);
-                }
-
-                // Put current profession's indicators at the top
-                if (core1 == coreSpec && core2 != coreSpec) return true;
-                if (core2 == coreSpec && core1 != coreSpec) return false;
-
-                // If different professions, sort by profession
-                if (core1 != core2) return core1 < core2;
-                
-                // Within same profession, sort by specialization
-                if (ri1.Specialization != ri2.Specialization)
-                    return ri1.Specialization < ri2.Specialization;
-
-                // Within same specialization, sort by radius
-                if (ri1.Radius != ri2.Radius)
-                    return ri1.Radius < ri2.Radius;
-
-                // If same radius, sort by arc
-                return ri1.Arc < ri2.Arc;
-            });
+        sortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
     }
 
     ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
@@ -643,7 +602,9 @@ void DrawListOfRangeIndicators()
         // Add separator and header between professions when sorting
         if (Settings::SortByProfession) {
             std::string currentCore = ri.Specialization;
-            if (ri.Specialization != "ALL") {
+            bool isGeneral = ri.Specialization == "ALL" || ri.Specialization.empty();
+            
+            if (!isGeneral) {
                 if (Specializations::EliteSpecToCoreSpec(ri.Specialization) != "Unknown") {
                     currentCore = Specializations::EliteSpecToCoreSpec(ri.Specialization);
                 }
@@ -782,38 +743,122 @@ void DrawListOfRangeIndicators()
 
 void AddonShortcut()
 {
-	ImGui::SameLine();
-	if (ImGui::BeginMenu("##"))
-	{
-		if (ImGui::Checkbox("Enabled##Global", &Settings::IsVisible))
-		{
-			Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
-			Settings::Save(SettingsPath);
-		}
+    ImGui::SameLine();
+    if (ImGui::BeginMenu("##"))
+    {
+        if (ImGui::Checkbox("Enabled##Global", &Settings::IsVisible))
+        {
+            Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
+            Settings::Save(SettingsPath);
+        }
 
-		if (Settings::IsVisible)
-		{
-			ImGui::Separator();
+        if (Settings::IsVisible)
+        {
+            ImGui::Separator();
 
-			if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
-			{
-				Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
-				Settings::Save(SettingsPath);
-			}
+            if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
+            {
+                Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
+                Settings::Save(SettingsPath);
+            }
 
-			std::lock_guard<std::mutex> lock(Settings::RangesMutex);
-			for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
-			{
-				RangeIndicator& ri = Settings::RangeIndicators[i];
+            std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+            
+            if (Settings::SortByProfession) {
+                auto sortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
+                for (const auto& [originalIndex, ri] : sortedIndicators)
+                {
+                    // Skip if filtering is enabled and spec doesn't match
+                    if (Settings::FilterSpecialization && ri.Specialization != spec) {
+                        if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) {
+                            if (ri.Specialization != "ALL" && !ri.Specialization.empty()) {
+                                continue;
+                            }
+                        }
+                    }
 
-				if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
-				{
-					Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
-					Settings::Save(SettingsPath);
-				}
-			}
-		}
+                    if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &Settings::RangeIndicators[originalIndex].IsVisible))
+                    {
+                        Settings::Settings[RANGE_INDICATORS][originalIndex]["IsVisible"] = Settings::RangeIndicators[originalIndex].IsVisible;
+                        Settings::Save(SettingsPath);
+                    }
+                }
+            } else {
+                for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+                {
+                    RangeIndicator& ri = Settings::RangeIndicators[i];
 
-		ImGui::EndMenu();
-	}
+                    // Skip if filtering is enabled and spec doesn't match
+                    if (Settings::FilterSpecialization && ri.Specialization != spec) {
+                        if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) {
+                            if (ri.Specialization != "ALL" && !ri.Specialization.empty()) {
+                                continue;
+                            }
+                        }
+                    }
+
+                    if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
+                    {
+                        Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
+                        Settings::Save(SettingsPath);
+                    }
+                }
+            }
+        }
+
+        ImGui::EndMenu();
+    }
+}
+
+std::vector<std::pair<int, RangeIndicator>> GetSortedIndicators(const std::vector<RangeIndicator>& indicators) 
+{
+    std::vector<std::pair<int, RangeIndicator>> sortedIndicators;
+    
+    // Create pairs of original index and indicator
+    for (int i = 0; i < (int)indicators.size(); i++) {
+        sortedIndicators.push_back({i, indicators[i]});
+    }
+
+    // Sort the indicators
+    std::sort(sortedIndicators.begin(), sortedIndicators.end(), 
+        [](const auto& a, const auto& b) {
+            const auto& ri1 = a.second;
+            const auto& ri2 = b.second;
+
+            // Put "ALL" and empty strings at the very bottom
+            bool isGeneral1 = ri1.Specialization == "ALL" || ri1.Specialization.empty();
+            bool isGeneral2 = ri2.Specialization == "ALL" || ri2.Specialization.empty();
+            if (isGeneral1 != isGeneral2) return isGeneral2;  // Put generals at the bottom
+            if (isGeneral1 && isGeneral2) return ri1.Radius < ri2.Radius;  // Sort generals by radius
+
+            // Get core specs
+            std::string core1 = ri1.Specialization;
+            std::string core2 = ri2.Specialization;
+            if (Specializations::EliteSpecToCoreSpec(ri1.Specialization) != "Unknown") {
+                core1 = Specializations::EliteSpecToCoreSpec(ri1.Specialization);
+            }
+            if (Specializations::EliteSpecToCoreSpec(ri2.Specialization) != "Unknown") {
+                core2 = Specializations::EliteSpecToCoreSpec(ri2.Specialization);
+            }
+
+            // Put current profession's indicators at the top
+            if (core1 == coreSpec && core2 != coreSpec) return true;
+            if (core2 == coreSpec && core1 != coreSpec) return false;
+
+            // If different professions, sort by profession
+            if (core1 != core2) return core1 < core2;
+            
+            // Within same profession, sort by specialization
+            if (ri1.Specialization != ri2.Specialization)
+                return ri1.Specialization < ri2.Specialization;
+
+            // Within same specialization, sort by radius
+            if (ri1.Radius != ri2.Radius)
+                return ri1.Radius < ri2.Radius;
+
+            // If same radius, sort by arc
+            return ri1.Arc < ri2.Arc;
+        });
+
+    return sortedIndicators;
 }
