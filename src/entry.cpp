@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <vector>
 #include <unordered_map>
+#include <algorithm>
 
 #include <DirectXMath.h>
 
@@ -550,141 +551,233 @@ void AddonOptions()
 }
 
 void DrawListOfRangeIndicators()
-{	
-	int indexRemove = -1;
+{   
+    int indexRemove = -1;
+    struct EditInfo {
+        int index;
+        RangeIndicator indicator;
+        bool needsSave;
+    };
+    EditInfo editInfo = {-1, {}, false};
 
-	ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
+    // Create a sorted copy of the range indicators if sorting is enabled
+    std::vector<std::pair<int, RangeIndicator>> sortedIndicators;
+    if (Settings::SortByProfession) {
+        // Create pairs of original index and indicator
+        for (int i = 0; i < (int)Settings::RangeIndicators.size(); i++) {
+            sortedIndicators.push_back({i, Settings::RangeIndicators[i]});
+        }
 
-	ImGui::TableNextRow();
+        // Sort the indicators
+        std::sort(sortedIndicators.begin(), sortedIndicators.end(), 
+            [&](const auto& a, const auto& b) {
+                const auto& ri1 = a.second;
+                const auto& ri2 = b.second;
 
-	ImGui::TableSetColumnIndex(2);
-	ImGui::Text("Range");
+                // Put "ALL" at the very bottom
+                if (ri1.Specialization == "ALL") return false;
+                if (ri2.Specialization == "ALL") return true;
 
-	ImGui::TableSetColumnIndex(3);
-	ImGui::Text("Radius");
+                // Get core specs
+                std::string core1 = ri1.Specialization;
+                std::string core2 = ri2.Specialization;
+                if (Specializations::EliteSpecToCoreSpec(ri1.Specialization) != "Unknown") {
+                    core1 = Specializations::EliteSpecToCoreSpec(ri1.Specialization);
+                }
+                if (Specializations::EliteSpecToCoreSpec(ri2.Specialization) != "Unknown") {
+                    core2 = Specializations::EliteSpecToCoreSpec(ri2.Specialization);
+                }
 
-	ImGui::TableSetColumnIndex(4);
-	ImGui::Text("Vertical Offset");
+                // Put current profession's indicators at the top
+                if (core1 == coreSpec && core2 != coreSpec) return true;
+                if (core2 == coreSpec && core1 != coreSpec) return false;
 
-	ImGui::TableSetColumnIndex(5);
-	ImGui::Text("Thickness");
+                // If different professions, sort by profession
+                if (core1 != core2) return core1 < core2;
+                
+                // Within same profession, sort by specialization
+                if (ri1.Specialization != ri2.Specialization)
+                    return ri1.Specialization < ri2.Specialization;
 
-	ImGui::TableSetColumnIndex(6);
-	ImGui::Text("Specialization");
+                // Within same specialization, sort by radius
+                if (ri1.Radius != ri2.Radius)
+                    return ri1.Radius < ri2.Radius;
 
-	std::lock_guard<std::mutex> lock(Settings::RangesMutex);
-	for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
-	{
-		RangeIndicator& ri = Settings::RangeIndicators[i];
+                // If same radius, sort by arc
+                return ri1.Arc < ri2.Arc;
+            });
+    }
 
-		ImGui::TableNextRow();
+    ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
 
-		ImGui::TableSetColumnIndex(0);
-		if (ImGui::Checkbox(("##Visible" + std::to_string(i)).c_str(), &ri.IsVisible))
-		{
-			Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
-			Settings::Save(SettingsPath);
-		}
+    ImGui::TableNextRow();
 
-		ImGui::TableSetColumnIndex(1);
-		if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(i)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
-		{
-			Settings::Settings[RANGE_INDICATORS][i]["RGBA"] = ri.RGBA;
-			Settings::Save(SettingsPath);
-		}
+    ImGui::TableSetColumnIndex(2);
+    ImGui::Text("Radius");
 
-		float inputWidth = ImGui::GetWindowContentRegionWidth() / 6;
+    ImGui::TableSetColumnIndex(3);
+    ImGui::Text("Arc");
 
-		ImGui::TableSetColumnIndex(2);
-		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##Radius" + std::to_string(i)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
-		{
-			bool sort = true;
-			Settings::Settings[RANGE_INDICATORS][i]["Radius"] = ri.Radius;
-			Settings::Save(SettingsPath);
-		}
+    ImGui::TableSetColumnIndex(4);
+    ImGui::Text("Vertical Offset");
 
-		ImGui::TableSetColumnIndex(3);
-		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##Arc" + std::to_string(i)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
-		{
-			bool sort = true;
+    ImGui::TableSetColumnIndex(5);
+    ImGui::Text("Thickness");
 
-			if (ri.Arc < 0) { ri.Arc = 0; }
-			if (ri.Arc > 360) { ri.Arc = 360; }
+    ImGui::TableSetColumnIndex(6);
+    ImGui::Text("Specialization");
 
-			Settings::Settings[RANGE_INDICATORS][i]["Arc"] = ri.Arc;
-			Settings::Save(SettingsPath);
-		}
+    std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+    
+    const int numIndicators = (int)Settings::RangeIndicators.size();
+    std::string lastCore = "";
+    
+    for (int i = 0; i < numIndicators; i++)
+    {
+        // Get the correct indicator and index based on whether we're sorting
+        int originalIndex;
+        RangeIndicator& ri = Settings::SortByProfession ? 
+            (originalIndex = sortedIndicators[i].first, sortedIndicators[i].second) : 
+            (originalIndex = i, Settings::RangeIndicators[i]);
 
-		ImGui::TableSetColumnIndex(4);
-		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##VOffset" + std::to_string(i)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
-		{
-			Settings::Settings[RANGE_INDICATORS][i]["VOffset"] = ri.VOffset;
-			Settings::Save(SettingsPath);
-		}
+        // Add separator and header between professions when sorting
+        if (Settings::SortByProfession) {
+            std::string currentCore = ri.Specialization;
+            if (ri.Specialization != "ALL") {
+                if (Specializations::EliteSpecToCoreSpec(ri.Specialization) != "Unknown") {
+                    currentCore = Specializations::EliteSpecToCoreSpec(ri.Specialization);
+                }
+                
+                if (currentCore != lastCore) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(6);
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+                    ImGui::Text("%s", currentCore.c_str());
+                    ImGui::PopStyleColor();
+                }
+                lastCore = currentCore;
+            } else if (lastCore != "") {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(6);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+                ImGui::Text("General");
+                ImGui::PopStyleColor();
+                lastCore = "";
+            }
+        }
 
-		ImGui::TableSetColumnIndex(5);
-		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##Thickness" + std::to_string(i)).c_str(), &ri.Thickness, 1.0f, 1.0f, "%.0f"))
-		{
-			if (ri.Thickness < 1) { ri.Thickness = 1; }
-			if (ri.Thickness > 25) { ri.Thickness = 25; }
+        ImGui::TableNextRow();
 
-			Settings::Settings[RANGE_INDICATORS][i]["Thickness"] = ri.Thickness;
-			Settings::Save(SettingsPath);
-		}
+        ImGui::TableSetColumnIndex(0);
+        if (ImGui::Checkbox(("##Visible" + std::to_string(originalIndex)).c_str(), &ri.IsVisible))
+        {
+            editInfo = {originalIndex, ri, true};
+        }
 
-		ImGui::TableSetColumnIndex(6);
-		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::BeginCombo(("##Specialization" + std::to_string(i)).c_str(), ri.Specialization.c_str()))
-		{
-			std::vector<std::string> specs = Specializations::distinctSpecializationNames;
-			specs.insert(specs.begin(), "ALL");
-			for (const std::string& spec : specs)
-			{
-				if (ImGui::Selectable(spec.c_str()))
-				{
-					ri.Specialization = spec;
-					Settings::Settings[RANGE_INDICATORS][i]["Specialization"] = ri.Specialization;
-					Settings::Save(SettingsPath);
-				}
-			}
-			ImGui::EndCombo();
-		}
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(originalIndex)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
+        {
+            editInfo = {originalIndex, ri, true};
+        }
 
-		ImGui::TableSetColumnIndex(7);
-		if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
-		{
-			indexRemove = i;
-		}
-	}
+        float inputWidth = ImGui::GetWindowContentRegionWidth() / 6;
 
-	ImGui::EndTable();
+        ImGui::TableSetColumnIndex(2);
+        ImGui::PushItemWidth(inputWidth);
+        if (ImGui::InputFloat(("##Radius" + std::to_string(originalIndex)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
+        {
+            editInfo = {originalIndex, ri, true};
+        }
 
-	if (indexRemove > -1)
-	{
-		Settings::RangeIndicators.erase(Settings::RangeIndicators.begin() + indexRemove);
-		Settings::Settings[RANGE_INDICATORS].erase(indexRemove);
-		Settings::Save(SettingsPath);
-	}
+        ImGui::TableSetColumnIndex(3);
+        ImGui::PushItemWidth(inputWidth);
+        if (ImGui::InputFloat(("##Arc" + std::to_string(originalIndex)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
+        {
+            if (ri.Arc < 0) { ri.Arc = 0; }
+            if (ri.Arc > 360) { ri.Arc = 360; }
+            editInfo = {originalIndex, ri, true};
+        }
 
-	if (ImGui::SmallButton("Add"))
-	{
-		RangeIndicator ri{ 0xFFFFFFFF, 360, true, 0, 360, 1, "ALL" };	
-		Settings::RangeIndicators.push_back(ri);
-		json jRi{};
-		jRi["RGBA"] = ri.RGBA;
-		jRi["Radius"] = ri.Radius;
-		jRi["Arc"] = ri.Arc;
-		jRi["IsVisible"] = ri.IsVisible;
-		jRi["VOffset"] = ri.VOffset;
-		jRi["Thickness"] = ri.Thickness;
-		jRi["Specialization"] = ri.Specialization;
-		Settings::Settings[RANGE_INDICATORS].push_back(jRi);
-		Settings::Save(SettingsPath);
-	}
+        ImGui::TableSetColumnIndex(4);
+        ImGui::PushItemWidth(inputWidth);
+        if (ImGui::InputFloat(("##VOffset" + std::to_string(originalIndex)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
+        {
+            editInfo = {originalIndex, ri, true};
+        }
+
+        ImGui::TableSetColumnIndex(5);
+        ImGui::PushItemWidth(inputWidth);
+        if (ImGui::InputFloat(("##Thickness" + std::to_string(originalIndex)).c_str(), &ri.Thickness, 1.0f, 1.0f, "%.0f"))
+        {
+            if (ri.Thickness < 1) { ri.Thickness = 1; }
+            if (ri.Thickness > 25) { ri.Thickness = 25; }
+            editInfo = {originalIndex, ri, true};
+        }
+
+        ImGui::TableSetColumnIndex(6);
+        ImGui::PushItemWidth(inputWidth);
+        if (ImGui::BeginCombo(("##Specialization" + std::to_string(originalIndex)).c_str(), ri.Specialization.c_str()))
+        {
+            std::vector<std::string> specs = Specializations::distinctSpecializationNames;
+            specs.insert(specs.begin(), "ALL");
+            for (const std::string& spec : specs)
+            {
+                if (ImGui::Selectable(spec.c_str()))
+                {
+                    ri.Specialization = spec;
+                    editInfo = {originalIndex, ri, true};
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        ImGui::TableSetColumnIndex(7);
+        if (ImGui::SmallButton(("Remove##" + std::to_string(originalIndex)).c_str()))
+        {
+            indexRemove = originalIndex;
+        }
+    }
+
+    ImGui::EndTable();
+
+    // Handle removal
+    if (indexRemove > -1)
+    {
+        Settings::RangeIndicators.erase(Settings::RangeIndicators.begin() + indexRemove);
+        Settings::Settings[RANGE_INDICATORS].erase(indexRemove);
+        Settings::Save(SettingsPath);
+    }
+
+    // Handle edit
+    if (editInfo.needsSave)
+    {
+        Settings::RangeIndicators[editInfo.index] = editInfo.indicator;
+        json& jRi = Settings::Settings[RANGE_INDICATORS][editInfo.index];
+        jRi["RGBA"] = editInfo.indicator.RGBA;
+        jRi["Radius"] = editInfo.indicator.Radius;
+        jRi["Arc"] = editInfo.indicator.Arc;
+        jRi["IsVisible"] = editInfo.indicator.IsVisible;
+        jRi["VOffset"] = editInfo.indicator.VOffset;
+        jRi["Thickness"] = editInfo.indicator.Thickness;
+        jRi["Specialization"] = editInfo.indicator.Specialization;
+        Settings::Save(SettingsPath);
+    }
+
+    if (ImGui::SmallButton("Add"))
+    {
+        RangeIndicator ri{ 0xFFFFFFFF, 360, true, 0, 360, 1, "ALL" };	
+        Settings::RangeIndicators.push_back(ri);
+        json jRi{};
+        jRi["RGBA"] = ri.RGBA;
+        jRi["Radius"] = ri.Radius;
+        jRi["Arc"] = ri.Arc;
+        jRi["IsVisible"] = ri.IsVisible;
+        jRi["VOffset"] = ri.VOffset;
+        jRi["Thickness"] = ri.Thickness;
+        jRi["Specialization"] = ri.Specialization;
+        Settings::Settings[RANGE_INDICATORS].push_back(jRi);
+        Settings::Save(SettingsPath);
+    }
 }
 
 void AddonShortcut()
