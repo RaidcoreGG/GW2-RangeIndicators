@@ -372,7 +372,7 @@ void AddonRender()
 
 	ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-	if (Settings::IsHitboxVisible && (Settings::AlwaysShowHitbox || (Settings::InCombatOnly && MumbleLink->Context.IsInCombat)))
+	if (Settings::IsHitboxVisible && (!Settings::InCombatOnly || Settings::AlwaysShowHitbox || MumbleLink->Context.IsInCombat))
 	{
 		float radius = 24.0f; // normal player
 		switch (MumbleLink->Context.MountIndex)
