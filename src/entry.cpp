@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <vector>
+#include <unordered_map>
 
 #include <DirectXMath.h>
 
@@ -445,18 +446,27 @@ namespace ImGui
 
 	void ShowDelayedTooltipOnHover(const char* tooltip, float delay)
 	{
-		static double hoverStartTime = -0.000001;
-		if (ImGui::IsItemHovered())
-		{
-			if (hoverStartTime < 0)
-				hoverStartTime = ImGui::GetTime();
+		/* This is a workaround to fix the tooltip not showing when hovering over the same item multiple times
+		 * This could also be fixed by upgrading to a newer version of ImGui that supports the new flags for ImGui::SetTooltip
+		 */
+
+		// Use a static map to track hover start times for different tooltips
+		static std::unordered_map<const char*, double> hoverStartTimes;
+		
+		if (ImGui::IsItemHovered()) {
+			// Initialize hover start time if not already set for this tooltip
+			if (hoverStartTimes.find(tooltip) == hoverStartTimes.end()) {
+				hoverStartTimes[tooltip] = ImGui::GetTime();
+			}
 			
-			if (ImGui::GetTime() - hoverStartTime >= delay) // 1 second delay
-				ImGui::SetTooltip(tooltip);
+			// Show tooltip if enough time has elapsed
+			if (ImGui::GetTime() - hoverStartTimes[tooltip] >= delay) {
+				ImGui::SetTooltip("%s", tooltip);
+			}
 		}
-		else
-		{
-			hoverStartTime = -0.000001;
+		else {
+			// Reset hover start time when no longer hovering
+			hoverStartTimes.erase(tooltip);
 		}
 	}
 }
