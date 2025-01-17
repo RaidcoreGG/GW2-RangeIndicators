@@ -31,6 +31,9 @@ HMODULE hSelf						= nullptr;
 std::filesystem::path AddonPath;
 std::filesystem::path SettingsPath;
 
+std::string spec;
+std::string coreSpec;
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
@@ -116,6 +119,9 @@ void ProcessKeybinds(const char* aIdentifier)
 void OnMumbleIdentityUpdated(void* aEventArgs)
 {
 	MumbleIdentity = (Mumble::Identity*)aEventArgs;
+	spec = Specializations::MumbleIdentToSpecString(MumbleIdentity);
+	coreSpec = Specializations::EliteSpecToCoreSpec(spec);
+	APIDefs->Log(ELogLevel::ELogLevel_INFO, "RangeIndicators", std::string("MumbleIdentityUpdated: Spec " + spec + ", CoreSpec " + coreSpec).c_str());
 }
 
 std::vector<Vector3> av_interp;
@@ -345,13 +351,13 @@ void AddonRender()
 {
 	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
 
+	if (!Settings::IsVisible) { return; }
+
 	av_interp.push_back(MumbleLink->AvatarPosition);
 	avf_interp.push_back(MumbleLink->AvatarFront);
 	if (av_interp.size() < 15) { return; }
 	av_interp.erase(av_interp.begin());
 	avf_interp.erase(avf_interp.begin());
-
-	if (!Settings::IsVisible) { return; }
 
 	dx::XMVECTOR camPos = { MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
 
@@ -409,6 +415,9 @@ void AddonRender()
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
 		if (!ri.IsVisible) { continue; }
+		if (Settings::FilterSpecialization && ri.Specialization != spec) { 
+			if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) { continue; }
+		}
 
 		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false);
 	}
