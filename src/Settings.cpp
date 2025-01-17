@@ -33,9 +33,9 @@ namespace Settings
 	void Load(std::filesystem::path aPath)
 	{
 		if (!std::filesystem::exists(aPath))
-		{ 
+		{
 			/* add default range indicators then return */
-			
+
 			std::lock_guard<std::mutex> lock(RangesMutex);
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -47,7 +47,7 @@ namespace Settings
 				1,
 				"ALL",
 				""
-			});
+				});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
@@ -58,7 +58,7 @@ namespace Settings
 				1,
 				"ALL",
 				""
-			});
+				});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
@@ -69,7 +69,7 @@ namespace Settings
 				1,
 				"ALL",
 				""
-			});
+				});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
@@ -80,7 +80,7 @@ namespace Settings
 				1,
 				"ALL",
 				""
-			});
+				});
 
 			RangeIndicators.push_back(RangeIndicator{
 				0xFFFFFFFF,
@@ -91,7 +91,7 @@ namespace Settings
 				1,
 				"ALL",
 				""
-			});
+				});
 
 			for (RangeIndicator& ri : Settings::RangeIndicators)
 			{
@@ -217,7 +217,7 @@ namespace Settings
 				ri.VOffset = jRi["VOffset"].get<float>();
 				ri.Thickness = jRi["Thickness"].get<float>();
 				ri.Specialization = jRi["Specialization"].get<std::string>();
-				
+
 				// Handle Name field, which might not exist in older settings files
 				if (jRi.contains("Name")) {
 					std::string name = jRi["Name"].get<std::string>();
@@ -225,7 +225,8 @@ namespace Settings
 						name = name.substr(0, MAX_NAME_LENGTH);  // Leave room for null terminator
 					}
 					ri.Name = name;
-				} else {
+				}
+				else {
 					ri.Name = "";  // Default to empty string if Name field doesn't exist
 				}
 

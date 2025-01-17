@@ -20,15 +20,15 @@ namespace Specializations {
 		{"Necromancer", {"Reaper", "Scourge", "Harbinger"}},
 		{"Revenant", {"Herald", "Renegade", "Vindicator"}} };
 
-    std::string EliteSpecToCoreSpec(std::string aSpec)
-    {
-        for (const auto& profession : professionSpecializations)
-        {
-            if (std::find(profession.eliteSpecs.begin(), profession.eliteSpecs.end(), aSpec) != profession.eliteSpecs.end())
-                return profession.coreProfession;
-        }
-        return "Unknown";
-    }
+	std::string EliteSpecToCoreSpec(std::string aSpec)
+	{
+		for (const auto& profession : professionSpecializations)
+		{
+			if (std::find(profession.eliteSpecs.begin(), profession.eliteSpecs.end(), aSpec) != profession.eliteSpecs.end())
+				return profession.coreProfession;
+		}
+		return "Unknown";
+	}
 
 	// Specialization IDs map for mumble identity
 	static const std::unordered_map<unsigned int, std::string> specializationNames = {
