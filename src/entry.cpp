@@ -477,6 +477,31 @@ void AddonOptions()
 
 	ImGui::Separator();
 
+	ImGui::TextDisabled("Specializations");
+
+	if (ImGui::Checkbox("Filter specialization", &Settings::FilterSpecialization))
+	{
+		Settings::Settings[FILTER_SPECIALIZATION] = Settings::FilterSpecialization;
+		Settings::Save(SettingsPath);
+	}
+
+	if (Settings::FilterSpecialization)
+	{
+		if (ImGui::Checkbox("Show profession on all specializations", &Settings::FilterProfession))
+		{
+			Settings::Settings[FILTER_PROFESSION] = Settings::FilterProfession;
+			Settings::Save(SettingsPath);
+		}
+
+		if (ImGui::Checkbox("Sort range indicator list by profession", &Settings::SortByProfession))
+		{
+			Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
+			Settings::Save(SettingsPath);
+		}
+	}
+
+	ImGui::Separator();
+	
 	int indexRemove = -1;
 
 	ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
@@ -494,6 +519,9 @@ void AddonOptions()
 
 	ImGui::TableSetColumnIndex(5);
 	ImGui::Text("Thickness");
+
+	ImGui::TableSetColumnIndex(6);
+	ImGui::Text("Specialization");
 
 	std::lock_guard<std::mutex> lock(Settings::RangesMutex);
 	for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
@@ -560,6 +588,24 @@ void AddonOptions()
 		}
 
 		ImGui::TableSetColumnIndex(6);
+		ImGui::PushItemWidth(inputWidth);
+		if (ImGui::BeginCombo(("##Specialization" + std::to_string(i)).c_str(), ri.Specialization.c_str()))
+		{
+			std::vector<std::string> specs = Specializations::distinctSpecializationNames;
+			specs.insert(specs.begin(), "ALL");
+			for (const std::string& spec : specs)
+			{
+				if (ImGui::Selectable(spec.c_str()))
+				{
+					ri.Specialization = spec;
+					Settings::Settings[RANGE_INDICATORS][i]["Specialization"] = ri.Specialization;
+					Settings::Save(SettingsPath);
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		ImGui::TableSetColumnIndex(7);
 		if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
 		{
 			indexRemove = i;

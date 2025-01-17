@@ -15,6 +15,7 @@ struct RangeIndicator
 	float VOffset;
 	float Arc;
 	float Thickness;
+	std::string Specialization;
 };
 
 extern const char* IS_VISIBLE;
@@ -23,6 +24,9 @@ extern const char* IS_HITBOX_VISIBLE;
 extern const char* ALWAYS_SHOW_HITBOX;
 extern const char* HITBOX_RGBA;
 extern const char* RANGE_INDICATORS;
+extern const char* FILTER_SPECIALIZATION;
+extern const char* FILTER_PROFESSION;
+extern const char* SORT_BY_PROFESSION;
 
 namespace Settings
 {
@@ -40,6 +44,9 @@ namespace Settings
 	extern bool IsHitboxVisible;
 	extern bool AlwaysShowHitbox;
 	extern unsigned int HitboxRGBA;
+	extern bool FilterSpecialization;
+	extern bool FilterProfession;
+	extern bool SortByProfession;
 	extern std::vector<RangeIndicator> RangeIndicators;
 }
 

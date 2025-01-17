@@ -11,7 +11,9 @@ const char* IS_HITBOX_VISIBLE = "IsHitboxVisible";
 const char* ALWAYS_SHOW_HITBOX = "AlwaysShowHitbox";
 const char* HITBOX_RGBA = "HitboxRGBA";
 const char* RANGE_INDICATORS = "RangeIndicators";
-
+const char* FILTER_SPECIALIZATION = "FilterSpecialization";
+const char* FILTER_PROFESSION = "FilterProfession";
+const char* SORT_BY_PROFESSION = "SortByProfession";
 namespace Settings
 {
 	std::mutex	Mutex;
@@ -127,6 +129,21 @@ namespace Settings
 			Settings[HITBOX_RGBA].get_to<unsigned int>(HitboxRGBA);
 		}
 
+		if (!Settings[FILTER_SPECIALIZATION].is_null())
+		{
+			Settings[FILTER_SPECIALIZATION].get_to<bool>(FilterSpecialization);
+		}
+
+		if (!Settings[FILTER_PROFESSION].is_null())
+		{
+			Settings[FILTER_PROFESSION].get_to<bool>(FilterProfession);
+		}
+
+		if (!Settings[SORT_BY_PROFESSION].is_null())
+		{
+			Settings[SORT_BY_PROFESSION].get_to<bool>(SortByProfession);
+		}
+
 		if (!Settings[RANGE_INDICATORS].is_null())
 		{
 			std::lock_guard<std::mutex> lock(RangesMutex);
@@ -144,6 +161,7 @@ namespace Settings
 				if (!ri["VOffset"].is_null()) { ri["VOffset"].get_to(rangeIndicator.VOffset); }
 				if (!ri["Arc"].is_null()) { ri["Arc"].get_to(rangeIndicator.Arc); } else { rangeIndicator.Arc = 360; }
 				if (!ri["Thickness"].is_null()) { ri["Thickness"].get_to(rangeIndicator.Thickness); } else { rangeIndicator.Thickness = 1; }
+				if (!ri["Specialization"].is_null()) { ri["Specialization"].get_to(rangeIndicator.Specialization); }
 
 				RangeIndicators.push_back(rangeIndicator);
 			}
@@ -164,6 +182,7 @@ namespace Settings
 				jRi["VOffset"] = ri.VOffset;
 				jRi["Arc"] = ri.Arc;
 				jRi["Thickness"] = ri.Thickness;
+				jRi["Specialization"] = ri.Specialization;
 				Settings[RANGE_INDICATORS].push_back(jRi);
 			}
 		}
@@ -186,5 +205,8 @@ namespace Settings
 	bool IsHitboxVisible = true;
 	bool AlwaysShowHitbox = false;
 	unsigned int HitboxRGBA = 0xFFFFFFFF;
+	bool FilterSpecialization = false;
+	bool FilterProfession = false;
+	bool SortByProfession = false;
 	std::vector<RangeIndicator> RangeIndicators;
 }
