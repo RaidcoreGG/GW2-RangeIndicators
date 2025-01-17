@@ -34,7 +34,8 @@ namespace Settings
 				true,
 				0,
 				360,
-				1
+				1,
+				"ALL"
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -43,7 +44,8 @@ namespace Settings
 				true,
 				0,
 				360,
-				1
+				1,
+				"ALL"
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -52,7 +54,8 @@ namespace Settings
 				true,
 				0,
 				360,
-				1
+				1,
+				"ALL"
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -61,7 +64,8 @@ namespace Settings
 				true,
 				0,
 				360,
-				1
+				1,
+				"ALL"
 			});
 
 			RangeIndicators.push_back(RangeIndicator{
@@ -70,7 +74,8 @@ namespace Settings
 				true,
 				0,
 				360,
-				1
+				1,
+				"ALL"
 			});
 
 			for (RangeIndicator& ri : Settings::RangeIndicators)
@@ -84,6 +89,7 @@ namespace Settings
 				jRi["VOffset"] = ri.VOffset;
 				jRi["Arc"] = ri.Arc;
 				jRi["Thickness"] = ri.Thickness;
+				jRi["Specialization"] = ri.Specialization;
 
 				Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 			}

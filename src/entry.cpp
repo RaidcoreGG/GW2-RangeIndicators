@@ -662,13 +662,16 @@ void DrawListOfRangeIndicators()
 
 	if (ImGui::SmallButton("Add"))
 	{
-		Settings::RangeIndicators.push_back(RangeIndicator{ 0xFFFFFFFF, 360, true, 0, 1 });
+		RangeIndicator ri{ 0xFFFFFFFF, 360, true, 0, 360, 1, "ALL" };	
+		Settings::RangeIndicators.push_back(ri);
 		json jRi{};
-		jRi["RGBA"] = 0xFFFFFFFF;
-		jRi["Radius"] = 360;
-		jRi["IsVisible"] = true;
-		jRi["VOffset"] = 0;
-		jRi["Thickness"] = 1;
+		jRi["RGBA"] = ri.RGBA;
+		jRi["Radius"] = ri.Radius;
+		jRi["Arc"] = ri.Arc;
+		jRi["IsVisible"] = ri.IsVisible;
+		jRi["VOffset"] = ri.VOffset;
+		jRi["Thickness"] = ri.Thickness;
+		jRi["Specialization"] = ri.Specialization;
 		Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 		Settings::Save(SettingsPath);
 	}
