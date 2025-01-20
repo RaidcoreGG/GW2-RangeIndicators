@@ -38,6 +38,9 @@ std::filesystem::path SettingsPath;
 std::string spec;
 std::string coreSpec;
 
+std::vector<std::pair<int, RangeIndicator>> cachedSortedIndicators;
+bool sortedIndicatorsNeedsUpdate = true;
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
@@ -128,6 +131,7 @@ void OnMumbleIdentityUpdated(void* aEventArgs)
 	MumbleIdentity = (Mumble::Identity*)aEventArgs;
 	spec = Specializations::MumbleIdentToSpecString(MumbleIdentity);
 	coreSpec = Specializations::EliteSpecToCoreSpec(spec);
+	sortedIndicatorsNeedsUpdate = true; // Invalidate cached sorted indicators because the spec has changed
 	APIDefs->Log(ELogLevel::ELogLevel_INFO, "RangeIndicators", std::string("MumbleIdentityUpdated: Spec " + spec + ", CoreSpec " + coreSpec).c_str());
 }
 
@@ -638,9 +642,9 @@ void DrawListOfRangeIndicators()
 	EditInfo editInfo = { -1, {}, false };
 
 	// Create a sorted copy of the range indicators if sorting is enabled
-	std::vector<std::pair<int, RangeIndicator>> sortedIndicators;
-	if (Settings::SortByProfession) {
-		sortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
+	if (Settings::SortByProfession && sortedIndicatorsNeedsUpdate) {
+		cachedSortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
+		sortedIndicatorsNeedsUpdate = false;
 	}
 
 	ImGui::BeginTable("#rangeindicatorslist", 9, ImGuiTableFlags_SizingFixedFit);
@@ -675,7 +679,7 @@ void DrawListOfRangeIndicators()
 		// Get the correct indicator and index based on whether we're sorting
 		int originalIndex;
 		RangeIndicator& ri = Settings::SortByProfession ?
-			(originalIndex = sortedIndicators[i].first, sortedIndicators[i].second) :
+			(originalIndex = cachedSortedIndicators[i].first, cachedSortedIndicators[i].second) :
 			(originalIndex = i, Settings::RangeIndicators[i]);
 
 		// Add separator and header between professions when sorting
@@ -806,6 +810,7 @@ void DrawListOfRangeIndicators()
 		Settings::RangeIndicators.erase(Settings::RangeIndicators.begin() + indexRemove);
 		Settings::Settings[RANGE_INDICATORS].erase(indexRemove);
 		Settings::Save(SettingsPath);
+		sortedIndicatorsNeedsUpdate = true;
 	}
 
 	// Handle edit
@@ -822,6 +827,7 @@ void DrawListOfRangeIndicators()
 		jRi["Thickness"] = editInfo.indicator.Thickness;
 		jRi["Specialization"] = editInfo.indicator.Specialization;
 		Settings::Save(SettingsPath);
+		sortedIndicatorsNeedsUpdate = true;
 	}
 
 	if (ImGui::SmallButton("Add"))
@@ -839,6 +845,7 @@ void DrawListOfRangeIndicators()
 		jRi["Specialization"] = ri.Specialization;
 		Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 		Settings::Save(SettingsPath);
+		sortedIndicatorsNeedsUpdate = true;
 	}
 }
 
@@ -907,8 +914,11 @@ void AddonShortcut()
 			std::lock_guard<std::mutex> lock(Settings::RangesMutex);
 
 			if (Settings::SortByProfession) {
-				auto sortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
-				for (const auto& [originalIndex, ri] : sortedIndicators)
+				if (sortedIndicatorsNeedsUpdate) {
+					cachedSortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
+					sortedIndicatorsNeedsUpdate = false;
+				}
+				for (const auto& [originalIndex, ri] : cachedSortedIndicators)
 				{
 					// Skip if filtering is enabled and spec doesn't match
 					if (Settings::FilterSpecialization && ri.Specialization != spec) {
