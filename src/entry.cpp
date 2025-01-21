@@ -579,7 +579,7 @@ void AddonOptions()
 	}
 	ImGui::ShowDelayedTooltipOnHover("Enable the shortcut menu", 1.0f);
 
-	if (Settings::ShortcutMenuEnabled)
+	if (Settings::ShortcutMenuEnabled && ImGui::TreeNodeEx("Shortcuts", ImGuiTreeNodeFlags_Framed))
 	{
 		if (ImGui::Checkbox("Hitbox Toggle##Shortcuts", &Settings::HitboxToggle))
 		{
@@ -622,6 +622,8 @@ void AddonOptions()
 			Settings::Save(SettingsPath);
 		}
 		ImGui::ShowDelayedTooltipOnHover("Put sort list by profession toggle in the shortcut menu", 1.0f);
+
+		ImGui::TreePop();
 	}
 
 	ImGui::Separator();
