@@ -112,7 +112,7 @@ void AddonUnload()
 
 	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
 
-	APIDefs->RemoveShortcut("QAS_RANGEINDICATORS");
+	APIDefs->RemoveSimpleShortcut("QAS_RANGEINDICATORS");
 
 	MumbleLink = nullptr;
 	NexusLink = nullptr;
