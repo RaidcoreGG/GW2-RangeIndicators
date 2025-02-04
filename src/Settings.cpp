@@ -14,6 +14,8 @@ const char* RANGE_INDICATORS = "RangeIndicators";
 const char* FILTER_SPECIALIZATION = "FilterSpecialization";
 const char* FILTER_PROFESSION = "FilterProfession";
 const char* SORT_BY_PROFESSION = "SortByProfession";
+const char* TEXT_ON_CIRCLE = "TextOnCircle";
+const char* TEXT_DISPLAY_MODE = "TextDisplayMode";
 
 // Shortcuts
 const char* SHORTCUT_MENU_ENABLED = "ShortcutMenuEnabled";
@@ -23,6 +25,7 @@ const char* SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE = "AlwaysShowHitboxToggle";
 const char* SHORTCUT_FILTER_SPECIALIZATION_TOGGLE = "FilterSpecializationToggle";
 const char* SHORTCUT_FILTER_PROFESSION_TOGGLE = "FilterProfessionToggle";
 const char* SHORTCUT_SORT_BY_PROFESSION_TOGGLE = "SortByProfessionToggle";
+const char* SHORTCUT_TEXT_ON_CIRCLE_TOGGLE = "TextOnCircleToggle";
 
 namespace Settings
 {
@@ -167,6 +170,11 @@ namespace Settings
 			Settings[SORT_BY_PROFESSION].get_to<bool>(SortByProfession);
 		}
 
+		if (!Settings[TEXT_ON_CIRCLE].is_null())
+		{
+			Settings[TEXT_ON_CIRCLE].get_to<bool>(TextOnCircle);
+		}
+
 		// Shortcuts
 		if (!Settings[SHORTCUT_MENU_ENABLED].is_null())
 		{
@@ -201,6 +209,11 @@ namespace Settings
 		if (!Settings[SHORTCUT_SORT_BY_PROFESSION_TOGGLE].is_null())
 		{
 			Settings[SHORTCUT_SORT_BY_PROFESSION_TOGGLE].get_to<bool>(SortByProfessionToggle);
+		}
+
+		if (!Settings[SHORTCUT_TEXT_ON_CIRCLE_TOGGLE].is_null())
+		{
+			Settings[SHORTCUT_TEXT_ON_CIRCLE_TOGGLE].get_to<bool>(TextOnCircleToggle);
 		}
 
 		// Range Indicators
@@ -298,6 +311,11 @@ namespace Settings
 			}
 		}
 
+		if (!Settings[TEXT_DISPLAY_MODE].is_null())
+		{
+			Settings[TEXT_DISPLAY_MODE].get_to<int>(reinterpret_cast<int&>(TextDisplayMode));
+		}
+
 		Settings::Mutex.unlock();
 	}
 	void Save(std::filesystem::path aPath)
@@ -320,6 +338,8 @@ namespace Settings
 	bool FilterProfession = false;
 	bool SortByProfession = false;
 	std::vector<RangeIndicator> RangeIndicators;
+	bool TextOnCircle = false;
+	TextMode TextDisplayMode = TextMode::Radius;
 
 	// Shortcuts
 	bool ShortcutMenuEnabled = true;
@@ -329,4 +349,5 @@ namespace Settings
 	bool FilterSpecializationToggle = false;
 	bool FilterProfessionToggle = false;
 	bool SortByProfessionToggle = false;
+	bool TextOnCircleToggle = false;
 }

@@ -21,6 +21,12 @@ struct RangeIndicator
 	std::string Name;
 };
 
+enum class TextMode {
+    Radius = 0,
+    Name = 1,
+    NameAndRadius = 2
+};
+
 extern const char* IS_VISIBLE;
 extern const char* IN_COMBAT_ONLY;
 extern const char* IS_HITBOX_VISIBLE;
@@ -30,6 +36,8 @@ extern const char* RANGE_INDICATORS;
 extern const char* FILTER_SPECIALIZATION;
 extern const char* FILTER_PROFESSION;
 extern const char* SORT_BY_PROFESSION;
+extern const char* TEXT_ON_CIRCLE;
+extern const char* TEXT_DISPLAY_MODE;
 
 // Shortcuts
 extern const char* SHORTCUT_MENU_ENABLED;
@@ -39,6 +47,7 @@ extern const char* SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE;
 extern const char* SHORTCUT_FILTER_SPECIALIZATION_TOGGLE;
 extern const char* SHORTCUT_FILTER_PROFESSION_TOGGLE;
 extern const char* SHORTCUT_SORT_BY_PROFESSION_TOGGLE;
+extern const char* SHORTCUT_TEXT_ON_CIRCLE_TOGGLE;
 
 
 namespace Settings
@@ -61,6 +70,8 @@ namespace Settings
 	extern bool FilterProfession;
 	extern bool SortByProfession;
 	extern std::vector<RangeIndicator> RangeIndicators;
+	extern bool TextOnCircle;
+	extern TextMode TextDisplayMode;
 
 	// Shortcuts
 	extern bool ShortcutMenuEnabled;
@@ -70,6 +81,7 @@ namespace Settings
 	extern bool FilterSpecializationToggle;
 	extern bool FilterProfessionToggle;
 	extern bool SortByProfessionToggle;
+	extern bool TextOnCircleToggle;
 }
 
 #endif

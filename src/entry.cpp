@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include <Windows.h>
 #include <vector>
 #include <unordered_map>
@@ -358,6 +359,110 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	}
 }
 
+void DrawTextOnCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, float aThickness, bool aShaded, bool aShowFlanks, const RangeIndicator& ri)
+{
+	// Determine text to display based on mode
+	std::string displayText;
+	switch (Settings::TextDisplayMode) {
+		case TextMode::Name:
+			if (!ri.Name.empty()) {
+				displayText = ri.Name;
+			}
+			break;
+		case TextMode::NameAndRadius:
+			if (!ri.Name.empty()) {
+				displayText = ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius)) + ")";
+			} else {
+				displayText = std::to_string(static_cast<int>(ri.Radius));
+			}
+			break;
+		case TextMode::Radius:
+		default:
+			displayText = std::to_string(static_cast<int>(ri.Radius));
+			break;
+	}
+
+	// Skip if no text to display
+	if (displayText.empty()) {
+		return;
+	}
+
+	// Convert radius to meters like in DrawCircle
+	aRadius *= 2.54f / 100.0f;
+	aVOffset *= 2.54f / 100.0f;
+
+	// Calculate facing angle like in DrawCircle
+	float facingRad = atan2f(aProjection.AgentFront.X, aProjection.AgentFront.Z);
+	float facingDeg = facingRad * 180.0f / 3.14159f;
+
+	// Calculate text positions based on arc and facing
+	std::vector<std::pair<Vector3, float>> textPositions;
+	float flankOffset = aArc / 2;
+	if (aArc == 360.0f) {
+		// For full circle, place text at cardinal points
+		for (int i = 0; i < 4; i++) {
+			float angle = facingRad + (i * 3.14159f / 2); // 90 degree increments
+			float x = aRadius * sin(angle) + aProjection.AgentPosition.X;
+			float z = aRadius * cos(angle) + aProjection.AgentPosition.Z;
+			textPositions.push_back({
+				Vector3{x, aProjection.AgentPosition.Y + aVOffset, z},
+				angle
+			});
+		}
+	} else {
+		// For arc, place text at start, middle and end
+		float startAngle = facingRad - (flankOffset * 3.14159f / 180.0f);
+		float endAngle = facingRad + (flankOffset * 3.14159f / 180.0f);
+		float midAngle = (startAngle + endAngle) / 2;
+
+		// Add positions for start, middle and end of arc
+		for (float angle : {startAngle, midAngle, endAngle}) {
+			float x = aRadius * sin(angle) + aProjection.AgentPosition.X;
+			float z = aRadius * cos(angle) + aProjection.AgentPosition.Z;
+			textPositions.push_back({
+				Vector3{x, aProjection.AgentPosition.Y + aVOffset, z},
+				angle
+			});
+		}
+	}
+
+	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+
+	// Draw text at each position
+	for (const auto& [pos, angle] : textPositions) {
+		// Project 3D position to screen space
+		dx::XMVECTOR point = {pos.X, pos.Y, pos.Z};
+		dx::XMVECTOR pointProjected = dx::XMVector3Project(
+			point, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f,
+			aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix
+		);
+
+		// Check if point is visible
+		dx::XMVECTOR pointTransformed = dx::XMVector3TransformCoord(point, aProjection.WorldMatrix);
+		pointTransformed = dx::XMVector3TransformCoord(pointTransformed, aProjection.ViewMatrix);
+		pointTransformed = dx::XMVector3TransformCoord(pointTransformed, aProjection.ProjectionMatrix);
+		float depth = dx::XMVectorGetZ(pointTransformed);
+
+		if (DepthOK(depth)) {
+			ImVec2 screenPos(pointProjected.m128_f32[0], pointProjected.m128_f32[1]);
+			
+			// Calculate text size for centering
+			ImVec2 textSize = ImGui::CalcTextSize(displayText.c_str());
+			screenPos.x -= textSize.x / 2;
+			screenPos.y -= textSize.y / 2;
+
+			// Draw shadow if shaded
+			if (aShaded) {
+				ImColor shadowColor = ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w);
+				dl->AddText(ImVec2(screenPos.x + 1, screenPos.y + 1), shadowColor, displayText.c_str());
+			}
+
+			// Draw actual text
+			dl->AddText(screenPos, aColor, displayText.c_str());
+		}
+	}
+}
+
 void AddonRender()
 {
 	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
@@ -436,6 +541,11 @@ void AddonRender()
 		}
 
 		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false);
+
+		if (Settings::TextOnCircle) 
+		{
+			DrawTextOnCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false, ri);
+		}
 	}
 }
 
@@ -561,6 +671,40 @@ void AddonOptions()
 
 	ImGui::Separator();
 
+	ImGui::TextDisabled("Text on circle");
+
+	if (ImGui::Checkbox("Enabled##TextOnCircle", &Settings::TextOnCircle))
+	{
+		Settings::Settings[TEXT_ON_CIRCLE] = Settings::TextOnCircle;
+		Settings::Save(SettingsPath);
+	}
+
+	if (Settings::TextOnCircle)
+	{
+		ImGui::SameLine();
+		const char* items[] = { "Radius", "Name", "Name + Radius" };
+		int currentItem = static_cast<int>(Settings::TextDisplayMode);
+		
+		// Calculate width based on longest item
+		float maxWidth = 0;
+		for (const char* item : items) {
+			maxWidth = std::max(maxWidth, ImGui::CalcTextSize(item).x);
+		}
+		// Add some padding for the combo arrow and frame
+		maxWidth += ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x * 2;
+		
+		ImGui::PushItemWidth(maxWidth);
+		if (ImGui::Combo("Display##TextMode", &currentItem, items, IM_ARRAYSIZE(items)))
+		{
+			Settings::TextDisplayMode = static_cast<TextMode>(currentItem);
+			Settings::Settings[TEXT_DISPLAY_MODE] = currentItem;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::PopItemWidth();
+	}
+
+	ImGui::Separator();
+
 	ImGui::TextDisabled("Shortcut Menu");
 
 	if (ImGui::Checkbox("Enabled##Shortcuts", &Settings::ShortcutMenuEnabled))
@@ -622,6 +766,13 @@ void AddonOptions()
 			Settings::Save(SettingsPath);
 		}
 		ImGui::ShowDelayedTooltipOnHover("Put sort list by profession toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Text on circle Toggle##Shortcuts", &Settings::TextOnCircleToggle))
+		{
+			Settings::Settings[SHORTCUT_TEXT_ON_CIRCLE_TOGGLE] = Settings::TextOnCircleToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put text on circle toggle in the shortcut menu", 1.0f);
 
 		ImGui::TreePop();
 	}
@@ -909,6 +1060,14 @@ void AddonShortcut()
 					Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
 					Settings::Save(SettingsPath);
 				}
+			}
+
+			ImGui::Separator();
+
+			if (Settings::TextOnCircleToggle && ImGui::Checkbox("Text on circle##TextOnCircle", &Settings::TextOnCircle))
+			{
+				Settings::Settings[TEXT_ON_CIRCLE] = Settings::TextOnCircle;
+				Settings::Save(SettingsPath);
 			}
 
 			ImGui::Separator();
