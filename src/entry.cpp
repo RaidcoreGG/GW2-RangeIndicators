@@ -1,5 +1,8 @@
+#define NOMINMAX
 #include <Windows.h>
 #include <vector>
+#include <unordered_map>
+#include <algorithm>
 
 #include <DirectXMath.h>
 
@@ -13,6 +16,8 @@
 #include "Settings.h"
 #include "Shared.h"
 
+#include "Specializations.h"
+
 namespace dx = DirectX;
 
 void AddonLoad(AddonAPI* aApi);
@@ -22,12 +27,20 @@ void OnMumbleIdentityUpdated(void* aEventArgs);
 void AddonRender();
 void AddonOptions();
 void AddonShortcut();
+void DrawListOfRangeIndicators();
+std::vector<std::pair<int, RangeIndicator>> GetSortedIndicators(const std::vector<RangeIndicator>& indicators);
 
-AddonDefinition AddonDef			= {};
-HMODULE hSelf						= nullptr;
+AddonDefinition AddonDef = {};
+HMODULE hSelf = nullptr;
 
 std::filesystem::path AddonPath;
 std::filesystem::path SettingsPath;
+
+std::string spec;
+std::string coreSpec;
+
+std::vector<std::pair<int, RangeIndicator>> cachedSortedIndicators;
+bool sortedIndicatorsNeedsUpdate = true;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
@@ -77,7 +90,10 @@ void AddonLoad(AddonAPI* aApi)
 	APIDefs->RegisterRender(ERenderType_Render, AddonRender);
 	APIDefs->RegisterRender(ERenderType_OptionsRender, AddonOptions);
 
-	APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
+	if (Settings::ShortcutMenuEnabled)
+	{
+		APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
+	}
 
 	APIDefs->RegisterKeybindWithString("KB_RI_TOGGLEVISIBLE", ProcessKeybinds, "(null)");
 
@@ -95,6 +111,8 @@ void AddonUnload()
 	APIDefs->UnsubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 
 	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
+
+	APIDefs->RemoveSimpleShortcut("QAS_RANGEINDICATORS");
 
 	MumbleLink = nullptr;
 	NexusLink = nullptr;
@@ -114,6 +132,10 @@ void ProcessKeybinds(const char* aIdentifier)
 void OnMumbleIdentityUpdated(void* aEventArgs)
 {
 	MumbleIdentity = (Mumble::Identity*)aEventArgs;
+	spec = Specializations::MumbleIdentToSpecString(MumbleIdentity);
+	coreSpec = Specializations::EliteSpecToCoreSpec(spec);
+	sortedIndicatorsNeedsUpdate = true; // Invalidate cached sorted indicators because the spec has changed
+	APIDefs->Log(ELogLevel::ELogLevel_INFO, "RangeIndicators", std::string("MumbleIdentityUpdated: Spec " + spec + ", CoreSpec " + coreSpec).c_str());
 }
 
 std::vector<Vector3> av_interp;
@@ -251,11 +273,11 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 		dx::XMVECTOR RFTransformed = dx::XMVector3TransformCoord({ rightFlank.X, rightFlank.Y, rightFlank.Z }, aProjection.WorldMatrix);
 		RFTransformed = dx::XMVector3TransformCoord(RFTransformed, aProjection.ViewMatrix);
 		RFTransformed = dx::XMVector3TransformCoord(RFTransformed, aProjection.ProjectionMatrix);
-		
+
 		dx::XMVECTOR LFTransformed = dx::XMVector3TransformCoord({ leftFlank.X, leftFlank.Y, leftFlank.Z }, aProjection.WorldMatrix);
 		LFTransformed = dx::XMVector3TransformCoord(LFTransformed, aProjection.ViewMatrix);
 		LFTransformed = dx::XMVector3TransformCoord(LFTransformed, aProjection.ProjectionMatrix);
-		
+
 		dx::XMVECTOR originTransformed = dx::XMVector3TransformCoord({ aProjection.AgentPosition.X, aProjection.AgentPosition.Y, aProjection.AgentPosition.Z }, aProjection.WorldMatrix);
 		originTransformed = dx::XMVector3TransformCoord(originTransformed, aProjection.ViewMatrix);
 		originTransformed = dx::XMVector3TransformCoord(originTransformed, aProjection.ProjectionMatrix);
@@ -339,17 +361,121 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	}
 }
 
+void DrawTextOnCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, float aThickness, bool aShaded, bool aShowFlanks, const RangeIndicator& ri)
+{
+	// Determine text to display based on mode
+	std::string displayText;
+	switch (Settings::TextDisplayMode) {
+		case TextMode::Name:
+			if (!ri.Name.empty()) {
+				displayText = ri.Name;
+			}
+			break;
+		case TextMode::NameAndRadius:
+			if (!ri.Name.empty()) {
+				displayText = ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius)) + ")";
+			} else {
+				displayText = std::to_string(static_cast<int>(ri.Radius));
+			}
+			break;
+		case TextMode::Radius:
+		default:
+			displayText = std::to_string(static_cast<int>(ri.Radius));
+			break;
+	}
+
+	// Skip if no text to display
+	if (displayText.empty()) {
+		return;
+	}
+
+	// Convert radius to meters like in DrawCircle
+	aRadius *= 2.54f / 100.0f;
+	aVOffset *= 2.54f / 100.0f;
+
+	// Calculate facing angle like in DrawCircle
+	float facingRad = atan2f(aProjection.AgentFront.X, aProjection.AgentFront.Z);
+	float facingDeg = facingRad * 180.0f / 3.14159f;
+
+	// Calculate text positions based on arc and facing
+	std::vector<std::pair<Vector3, float>> textPositions;
+	float flankOffset = aArc / 2;
+	if (aArc == 360.0f) {
+		// For full circle, place text at cardinal points
+		for (int i = 0; i < 4; i++) {
+			float angle = facingRad + (i * 3.14159f / 2); // 90 degree increments
+			float x = aRadius * sin(angle) + aProjection.AgentPosition.X;
+			float z = aRadius * cos(angle) + aProjection.AgentPosition.Z;
+			textPositions.push_back({
+				Vector3{x, aProjection.AgentPosition.Y + aVOffset, z},
+				angle
+			});
+		}
+	} else {
+		// For arc, place text at start, middle and end
+		float startAngle = facingRad - (flankOffset * 3.14159f / 180.0f);
+		float endAngle = facingRad + (flankOffset * 3.14159f / 180.0f);
+		float midAngle = (startAngle + endAngle) / 2;
+
+		// Add positions for start, middle and end of arc
+		for (float angle : {startAngle, midAngle, endAngle}) {
+			float x = aRadius * sin(angle) + aProjection.AgentPosition.X;
+			float z = aRadius * cos(angle) + aProjection.AgentPosition.Z;
+			textPositions.push_back({
+				Vector3{x, aProjection.AgentPosition.Y + aVOffset, z},
+				angle
+			});
+		}
+	}
+
+	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+
+	// Draw text at each position
+	for (const auto& [pos, angle] : textPositions) {
+		// Project 3D position to screen space
+		dx::XMVECTOR point = {pos.X, pos.Y, pos.Z};
+		dx::XMVECTOR pointProjected = dx::XMVector3Project(
+			point, 0, 0, NexusLink->Width, NexusLink->Height, 1.0f, 10000.0f,
+			aProjection.ProjectionMatrix, aProjection.ViewMatrix, aProjection.WorldMatrix
+		);
+
+		// Check if point is visible
+		dx::XMVECTOR pointTransformed = dx::XMVector3TransformCoord(point, aProjection.WorldMatrix);
+		pointTransformed = dx::XMVector3TransformCoord(pointTransformed, aProjection.ViewMatrix);
+		pointTransformed = dx::XMVector3TransformCoord(pointTransformed, aProjection.ProjectionMatrix);
+		float depth = dx::XMVectorGetZ(pointTransformed);
+
+		if (DepthOK(depth)) {
+			ImVec2 screenPos(pointProjected.m128_f32[0], pointProjected.m128_f32[1]);
+			
+			// Calculate text size for centering
+			ImVec2 textSize = ImGui::CalcTextSize(displayText.c_str());
+			screenPos.x -= textSize.x / 2;
+			screenPos.y -= textSize.y / 2;
+
+			// Draw shadow if shaded
+			if (aShaded) {
+				ImColor shadowColor = ImColor(0.f, 0.f, 0.f, ((ImVec4)aColor).w);
+				dl->AddText(ImVec2(screenPos.x + 1, screenPos.y + 1), shadowColor, displayText.c_str());
+			}
+
+			// Draw actual text
+			dl->AddText(screenPos, aColor, displayText.c_str());
+		}
+	}
+}
+
 void AddonRender()
 {
 	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
+
+	if (!Settings::IsVisible) { return; }
 
 	av_interp.push_back(MumbleLink->AvatarPosition);
 	avf_interp.push_back(MumbleLink->AvatarFront);
 	if (av_interp.size() < 15) { return; }
 	av_interp.erase(av_interp.begin());
 	avf_interp.erase(avf_interp.begin());
-
-	if (!Settings::IsVisible) { return; }
 
 	dx::XMVECTOR camPos = { MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
 
@@ -370,7 +496,7 @@ void AddonRender()
 
 	ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-	if (Settings::IsHitboxVisible)
+	if (Settings::IsHitboxVisible && (!Settings::InCombatOnly || Settings::AlwaysShowHitbox || MumbleLink->Context.IsInCombat))
 	{
 		float radius = 24.0f; // normal player
 		switch (MumbleLink->Context.MountIndex)
@@ -402,11 +528,26 @@ void AddonRender()
 		DrawCircle(projectionCtx, dl, Settings::HitboxRGBA, radius, 0, 360, 1, true, true);
 	}
 
+	if (Settings::InCombatOnly && !MumbleLink->Context.IsInCombat) { return; }
+
 	for (RangeIndicator& ri : Settings::RangeIndicators)
 	{
 		if (!ri.IsVisible) { continue; }
+		// Skip if filtering is enabled and spec doesn't match
+		if (Settings::FilterSpecialization && ri.Specialization != spec) {
+			if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) {
+				if (ri.Specialization != "ALL" && !ri.Specialization.empty()) {
+					continue;
+				}
+			}
+		}
 
 		DrawCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false);
+
+		if (Settings::TextOnCircle) 
+		{
+			DrawTextOnCircle(projectionCtx, dl, ri.RGBA, ri.Radius, ri.VOffset, ri.Arc, ri.Thickness, true, false, ri);
+		}
 	}
 }
 
@@ -428,6 +569,32 @@ namespace ImGui
 
 		return result;
 	}
+
+	void ShowDelayedTooltipOnHover(const char* tooltip, float delay)
+	{
+		/* This is a workaround to fix the tooltip not showing when hovering over the same item multiple times
+		 * This could also be fixed by upgrading to a newer version of ImGui that supports the new flags for ImGui::SetTooltip
+		 */
+
+		 // Use a static map to track hover start times for different tooltips
+		static std::unordered_map<const char*, double> hoverStartTimes;
+
+		if (ImGui::IsItemHovered()) {
+			// Initialize hover start time if not already set for this tooltip
+			if (hoverStartTimes.find(tooltip) == hoverStartTimes.end()) {
+				hoverStartTimes[tooltip] = ImGui::GetTime();
+			}
+
+			// Show tooltip if enough time has elapsed
+			if (ImGui::GetTime() - hoverStartTimes[tooltip] >= delay) {
+				ImGui::SetTooltip("%s", tooltip);
+			}
+		}
+		else {
+			// Reset hover start time when no longer hovering
+			hoverStartTimes.erase(tooltip);
+		}
+	}
 }
 
 void AddonOptions()
@@ -435,6 +602,12 @@ void AddonOptions()
 	if (ImGui::Checkbox("Enabled##Global", &Settings::IsVisible))
 	{
 		Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
+		Settings::Save(SettingsPath);
+	}
+
+	if (ImGui::Checkbox("Only show in combat##Global", &Settings::InCombatOnly))
+	{
+		Settings::Settings[IN_COMBAT_ONLY] = Settings::InCombatOnly;
 		Settings::Save(SettingsPath);
 	}
 
@@ -448,6 +621,19 @@ void AddonOptions()
 		Settings::Save(SettingsPath);
 	}
 
+	if (Settings::IsHitboxVisible && Settings::InCombatOnly)
+	{
+		ImGui::SameLine();
+		if (ImGui::Checkbox("Always show hitbox##Hitbox", &Settings::AlwaysShowHitbox))
+		{
+			Settings::Settings[ALWAYS_SHOW_HITBOX] = Settings::AlwaysShowHitbox;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover(
+			"Show hitbox even when not in combat, this setting is only used when 'Only show in combat' is enabled",
+			1.0f);
+	}
+
 	if (ImGui::ColorEdit4U32("##Hitbox", &Settings::HitboxRGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
 	{
 		Settings::Settings[HITBOX_RGBA] = Settings::HitboxRGBA;
@@ -458,115 +644,363 @@ void AddonOptions()
 
 	ImGui::Separator();
 
-	int indexRemove = -1;
+	ImGui::TextDisabled("Specializations");
 
-	ImGui::BeginTable("#rangeindicatorslist", 8, ImGuiTableFlags_SizingFixedFit);
+	if (ImGui::Checkbox("Filter specialization##Specializations", &Settings::FilterSpecialization))
+	{
+		Settings::Settings[FILTER_SPECIALIZATION] = Settings::FilterSpecialization;
+		Settings::Save(SettingsPath);
+	}
+	ImGui::ShowDelayedTooltipOnHover("Only show range indicators for your current specialization", 1.0f);
+
+	if (Settings::FilterSpecialization)
+	{
+		ImGui::SameLine();
+		if (ImGui::Checkbox("Show core on all specs##Specializations", &Settings::FilterProfession))
+		{
+			Settings::Settings[FILTER_PROFESSION] = Settings::FilterProfession;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Show range indicators for your core profession on all specs", 1.0f);
+		ImGui::SameLine();
+		if (ImGui::Checkbox("Sort list by profession##Specializations", &Settings::SortByProfession))
+		{
+			Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Sort range indicators by profession", 1.0f);
+	}
+
+	ImGui::Separator();
+
+	ImGui::TextDisabled("Text on circle");
+
+	if (ImGui::Checkbox("Enabled##TextOnCircle", &Settings::TextOnCircle))
+	{
+		Settings::Settings[TEXT_ON_CIRCLE] = Settings::TextOnCircle;
+		Settings::Save(SettingsPath);
+	}
+
+	if (Settings::TextOnCircle)
+	{
+		ImGui::SameLine();
+		const char* items[] = { "Radius", "Name", "Name + Radius" };
+		int currentItem = static_cast<int>(Settings::TextDisplayMode);
+		
+		// Calculate width based on longest item
+		float maxWidth = 0;
+		for (const char* item : items) {
+			maxWidth = std::max(maxWidth, ImGui::CalcTextSize(item).x);
+		}
+		// Add some padding for the combo arrow and frame
+		maxWidth += ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x * 2;
+		
+		ImGui::PushItemWidth(maxWidth);
+		if (ImGui::Combo("Display##TextMode", &currentItem, items, IM_ARRAYSIZE(items)))
+		{
+			Settings::TextDisplayMode = static_cast<TextMode>(currentItem);
+			Settings::Settings[TEXT_DISPLAY_MODE] = currentItem;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::PopItemWidth();
+	}
+
+	ImGui::Separator();
+
+	ImGui::TextDisabled("Shortcut Menu");
+
+	if (ImGui::Checkbox("Enabled##Shortcuts", &Settings::ShortcutMenuEnabled))
+	{
+		Settings::Settings[SHORTCUT_MENU_ENABLED] = Settings::ShortcutMenuEnabled;
+		Settings::Save(SettingsPath);
+
+		if (!Settings::ShortcutMenuEnabled)
+		{
+			APIDefs->RemoveSimpleShortcut("QAS_RANGEINDICATORS");
+		}
+		if (Settings::ShortcutMenuEnabled)
+		{
+			APIDefs->AddSimpleShortcut("QAS_RANGEINDICATORS", AddonShortcut);
+		}
+	}
+	ImGui::ShowDelayedTooltipOnHover("Enable the shortcut menu", 1.0f);
+
+	if (Settings::ShortcutMenuEnabled && ImGui::TreeNodeEx("Shortcuts", ImGuiTreeNodeFlags_Framed))
+	{
+		if (ImGui::Checkbox("Hitbox Toggle##Shortcuts", &Settings::HitboxToggle))
+		{
+			Settings::Settings[SHORTCUT_HITBOX_TOGGLE] = Settings::HitboxToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put hitbox toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Combat Toggle##Shortcuts", &Settings::CombatToggle))
+		{
+			Settings::Settings[SHORTCUT_COMBAT_TOGGLE] = Settings::CombatToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put only show in combat toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Always show hitbox Toggle##Shortcuts", &Settings::AlwaysShowHitboxToggle))
+		{
+			Settings::Settings[SHORTCUT_ALWAYS_SHOW_HITBOX_TOGGLE] = Settings::AlwaysShowHitboxToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put always show hitbox toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Filter specialization Toggle##Shortcuts", &Settings::FilterSpecializationToggle))
+		{
+			Settings::Settings[SHORTCUT_FILTER_SPECIALIZATION_TOGGLE] = Settings::FilterSpecializationToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put filter specialization toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Show core on all specs Toggle##Shortcuts", &Settings::FilterProfessionToggle))
+		{
+			Settings::Settings[SHORTCUT_FILTER_PROFESSION_TOGGLE] = Settings::FilterProfessionToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put show core on all specs toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Sort list by profession Toggle##Shortcuts", &Settings::SortByProfessionToggle))
+		{
+			Settings::Settings[SHORTCUT_SORT_BY_PROFESSION_TOGGLE] = Settings::SortByProfessionToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put sort list by profession toggle in the shortcut menu", 1.0f);
+
+		if (ImGui::Checkbox("Text on circle Toggle##Shortcuts", &Settings::TextOnCircleToggle))
+		{
+			Settings::Settings[SHORTCUT_TEXT_ON_CIRCLE_TOGGLE] = Settings::TextOnCircleToggle;
+			Settings::Save(SettingsPath);
+		}
+		ImGui::ShowDelayedTooltipOnHover("Put text on circle toggle in the shortcut menu", 1.0f);
+
+		ImGui::TreePop();
+	}
+
+	ImGui::Separator();
+
+	ImGui::TextDisabled("Range Indicators");
+
+	DrawListOfRangeIndicators();
+}
+
+void DrawListOfRangeIndicators()
+{
+	int indexRemove = -1;
+	struct EditInfo {
+		int index;
+		RangeIndicator indicator;
+		bool needsSave;
+	};
+	EditInfo editInfo = { -1, {}, false };
+
+	// Create a sorted copy of the range indicators if sorting is enabled
+	if (Settings::SortByProfession && sortedIndicatorsNeedsUpdate) {
+		cachedSortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
+		sortedIndicatorsNeedsUpdate = false;
+	}
+
+	ImGui::BeginTable("#rangeindicatorslist", 9, ImGuiTableFlags_SizingFixedFit);
 
 	ImGui::TableNextRow();
 
 	ImGui::TableSetColumnIndex(2);
-	ImGui::Text("Range");
+	ImGui::Text("Name");
 
 	ImGui::TableSetColumnIndex(3);
 	ImGui::Text("Radius");
 
 	ImGui::TableSetColumnIndex(4);
-	ImGui::Text("Vertical Offset");
+	ImGui::Text("Arc");
 
 	ImGui::TableSetColumnIndex(5);
+	ImGui::Text("Vert. Offset");
+
+	ImGui::TableSetColumnIndex(6);
 	ImGui::Text("Thickness");
 
+	ImGui::TableSetColumnIndex(7);
+	ImGui::Text("Specialization");
+
 	std::lock_guard<std::mutex> lock(Settings::RangesMutex);
-	for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+
+	const int numIndicators = (int)Settings::RangeIndicators.size();
+	std::string lastCore = "";
+
+	for (int i = 0; i < numIndicators; i++)
 	{
-		RangeIndicator& ri = Settings::RangeIndicators[i];
+		// Get the correct indicator and index based on whether we're sorting
+		int originalIndex;
+		RangeIndicator& ri = Settings::SortByProfession ?
+			(originalIndex = cachedSortedIndicators[i].first, cachedSortedIndicators[i].second) :
+			(originalIndex = i, Settings::RangeIndicators[i]);
+
+		// Add separator and header between professions when sorting
+		if (Settings::SortByProfession) {
+			std::string currentCore = ri.Specialization;
+			bool isGeneral = ri.Specialization == "ALL" || ri.Specialization.empty();
+
+			if (!isGeneral) {
+				if (Specializations::EliteSpecToCoreSpec(ri.Specialization) != "Unknown") {
+					currentCore = Specializations::EliteSpecToCoreSpec(ri.Specialization);
+				}
+
+				if (currentCore != lastCore) {
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(7);
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+					ImGui::Text("%s", currentCore.c_str());
+					ImGui::PopStyleColor();
+				}
+				lastCore = currentCore;
+			}
+			else if (lastCore != "") {
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(7);
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+				ImGui::Text("General");
+				ImGui::PopStyleColor();
+				lastCore = "";
+			}
+		}
 
 		ImGui::TableNextRow();
 
 		ImGui::TableSetColumnIndex(0);
-		if (ImGui::Checkbox(("##Visible" + std::to_string(i)).c_str(), &ri.IsVisible))
+		if (ImGui::Checkbox(("##Visible" + std::to_string(originalIndex)).c_str(), &ri.IsVisible))
 		{
-			Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
-			Settings::Save(SettingsPath);
+			editInfo = { originalIndex, ri, true };
 		}
+		float checkboxWidth = ImGui::CalcItemWidth();
 
 		ImGui::TableSetColumnIndex(1);
-		if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(i)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
+		if (ImGui::ColorEdit4U32(("Colour##" + std::to_string(originalIndex)).c_str(), &ri.RGBA, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
 		{
-			Settings::Settings[RANGE_INDICATORS][i]["RGBA"] = ri.RGBA;
-			Settings::Save(SettingsPath);
+			editInfo = { originalIndex, ri, true };
 		}
+		float colorEditWidth = ImGui::CalcItemWidth();
 
-		float inputWidth = ImGui::GetWindowContentRegionWidth() / 6;
+		// Calculate remove button width first
+		float removeButtonWidth = ImGui::CalcTextSize("Remove").x + ImGui::GetStyle().FramePadding.x * 4;
+		// Calculate remaining width for other columns
+		float remainingWidth = ImGui::GetWindowContentRegionWidth() - checkboxWidth - colorEditWidth - removeButtonWidth;
+		float inputWidth = remainingWidth / 6; // 6 columns (Name, Radius, Arc, VOffset, Thickness, Spec)
+
+		// Use these widths for the input columns...
 
 		ImGui::TableSetColumnIndex(2);
 		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##Radius" + std::to_string(i)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
+		char nameBuf[MAX_NAME_LENGTH + 1];  // +1 for null terminator
+		strncpy_s(nameBuf, ri.Name.c_str(), MAX_NAME_LENGTH);
+		if (ImGui::InputText(("##Name" + std::to_string(originalIndex)).c_str(), nameBuf, sizeof(nameBuf)))
 		{
-			bool sort = true;
-			Settings::Settings[RANGE_INDICATORS][i]["Radius"] = ri.Radius;
-			Settings::Save(SettingsPath);
+			ri.Name = nameBuf;
+			editInfo = { originalIndex, ri, true };
 		}
 
 		ImGui::TableSetColumnIndex(3);
 		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##Arc" + std::to_string(i)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
+		if (ImGui::InputFloat(("##Radius" + std::to_string(originalIndex)).c_str(), &ri.Radius, 1.0f, 1.0f, "%.0f"))
 		{
-			bool sort = true;
-
-			if (ri.Arc < 0) { ri.Arc = 0; }
-			if (ri.Arc > 360) { ri.Arc = 360; }
-
-			Settings::Settings[RANGE_INDICATORS][i]["Arc"] = ri.Arc;
-			Settings::Save(SettingsPath);
+			editInfo = { originalIndex, ri, true };
 		}
 
 		ImGui::TableSetColumnIndex(4);
 		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##VOffset" + std::to_string(i)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
+		if (ImGui::InputFloat(("##Arc" + std::to_string(originalIndex)).c_str(), &ri.Arc, 1.0f, 1.0f, "%.0f"))
 		{
-			Settings::Settings[RANGE_INDICATORS][i]["VOffset"] = ri.VOffset;
-			Settings::Save(SettingsPath);
+			if (ri.Arc < 0) { ri.Arc = 0; }
+			if (ri.Arc > 360) { ri.Arc = 360; }
+			editInfo = { originalIndex, ri, true };
 		}
 
 		ImGui::TableSetColumnIndex(5);
-		ImGui::PushItemWidth(inputWidth);
-		if (ImGui::InputFloat(("##Thickness" + std::to_string(i)).c_str(), &ri.Thickness, 1.0f, 1.0f, "%.0f"))
+		ImGui::PushItemWidth(inputWidth * 0.75f);
+		if (ImGui::InputFloat(("##VOffset" + std::to_string(originalIndex)).c_str(), &ri.VOffset, 1.0f, 1.0f, "%.0f"))
 		{
-			if (ri.Thickness < 1) { ri.Thickness = 1; }
-			if (ri.Thickness > 25) { ri.Thickness = 25; }
-
-			Settings::Settings[RANGE_INDICATORS][i]["Thickness"] = ri.Thickness;
-			Settings::Save(SettingsPath);
+			editInfo = { originalIndex, ri, true };
 		}
 
 		ImGui::TableSetColumnIndex(6);
-		if (ImGui::SmallButton(("Remove##" + std::to_string(i)).c_str()))
+		ImGui::PushItemWidth(inputWidth * 0.75f);
+		if (ImGui::InputFloat(("##Thickness" + std::to_string(originalIndex)).c_str(), &ri.Thickness, 1.0f, 1.0f, "%.0f"))
 		{
-			indexRemove = i;
+			if (ri.Thickness < 1) { ri.Thickness = 1; }
+			if (ri.Thickness > 25) { ri.Thickness = 25; }
+			editInfo = { originalIndex, ri, true };
+		}
+
+		ImGui::TableSetColumnIndex(7);
+		ImGui::PushItemWidth(inputWidth);
+		if (ImGui::BeginCombo(("##Specialization" + std::to_string(originalIndex)).c_str(), ri.Specialization.c_str()))
+		{
+			std::vector<std::string> specs = Specializations::distinctSpecializationNames;
+			specs.insert(specs.begin(), "ALL");
+			for (const std::string& spec : specs)
+			{
+				if (ImGui::Selectable(spec.c_str()))
+				{
+					ri.Specialization = spec;
+					editInfo = { originalIndex, ri, true };
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		ImGui::TableSetColumnIndex(8);
+		ImGui::PushItemWidth(removeButtonWidth);
+		if (ImGui::SmallButton(("Remove##" + std::to_string(originalIndex)).c_str()))
+		{
+			indexRemove = originalIndex;
 		}
 	}
 
 	ImGui::EndTable();
 
+	// Handle removal
 	if (indexRemove > -1)
 	{
 		Settings::RangeIndicators.erase(Settings::RangeIndicators.begin() + indexRemove);
 		Settings::Settings[RANGE_INDICATORS].erase(indexRemove);
 		Settings::Save(SettingsPath);
+		sortedIndicatorsNeedsUpdate = true;
+	}
+
+	// Handle edit
+	if (editInfo.needsSave)
+	{
+		Settings::RangeIndicators[editInfo.index] = editInfo.indicator;
+		json& jRi = Settings::Settings[RANGE_INDICATORS][editInfo.index];
+		jRi["RGBA"] = editInfo.indicator.RGBA;
+		jRi["Name"] = editInfo.indicator.Name;
+		jRi["Radius"] = editInfo.indicator.Radius;
+		jRi["Arc"] = editInfo.indicator.Arc;
+		jRi["IsVisible"] = editInfo.indicator.IsVisible;
+		jRi["VOffset"] = editInfo.indicator.VOffset;
+		jRi["Thickness"] = editInfo.indicator.Thickness;
+		jRi["Specialization"] = editInfo.indicator.Specialization;
+		Settings::Save(SettingsPath);
+		sortedIndicatorsNeedsUpdate = true;
 	}
 
 	if (ImGui::SmallButton("Add"))
 	{
-		Settings::RangeIndicators.push_back(RangeIndicator{ 0xFFFFFFFF, 360, true, 0, 1 });
+		RangeIndicator ri{ 0xFFFFFFFF, 360, true, 0, 360, 1, "ALL", "" };
+		Settings::RangeIndicators.push_back(ri);
 		json jRi{};
-		jRi["RGBA"] = 0xFFFFFFFF;
-		jRi["Radius"] = 360;
-		jRi["IsVisible"] = true;
-		jRi["VOffset"] = 0;
-		jRi["Thickness"] = 1;
+		jRi["RGBA"] = ri.RGBA;
+		jRi["Name"] = ri.Name;
+		jRi["Radius"] = ri.Radius;
+		jRi["Arc"] = ri.Arc;
+		jRi["IsVisible"] = ri.IsVisible;
+		jRi["VOffset"] = ri.VOffset;
+		jRi["Thickness"] = ri.Thickness;
+		jRi["Specialization"] = ri.Specialization;
 		Settings::Settings[RANGE_INDICATORS].push_back(jRi);
 		Settings::Save(SettingsPath);
+		sortedIndicatorsNeedsUpdate = true;
 	}
 }
 
@@ -580,30 +1014,227 @@ void AddonShortcut()
 			Settings::Settings[IS_VISIBLE] = Settings::IsVisible;
 			Settings::Save(SettingsPath);
 		}
+		if (Settings::CombatToggle && ImGui::Checkbox("Only show in combat##Global", &Settings::InCombatOnly))
+		{
+			Settings::Settings[IN_COMBAT_ONLY] = Settings::InCombatOnly;
+			Settings::Save(SettingsPath);
+		}
 
 		if (Settings::IsVisible)
 		{
 			ImGui::Separator();
 
-			if (ImGui::Checkbox("Hitbox", &Settings::IsHitboxVisible))
+			if (Settings::HitboxToggle && ImGui::Checkbox("Hitbox##Hitbox", &Settings::IsHitboxVisible))
 			{
 				Settings::Settings[IS_HITBOX_VISIBLE] = Settings::IsHitboxVisible;
 				Settings::Save(SettingsPath);
 			}
 
-			std::lock_guard<std::mutex> lock(Settings::RangesMutex);
-			for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+			if (Settings::AlwaysShowHitboxToggle && Settings::IsHitboxVisible && Settings::InCombatOnly)
 			{
-				RangeIndicator& ri = Settings::RangeIndicators[i];
-
-				if (ImGui::Checkbox(std::to_string(static_cast<int>(ri.Radius)).c_str(), &ri.IsVisible))
+				ImGui::SameLine();
+				if (ImGui::Checkbox("Always show##Hitbox", &Settings::AlwaysShowHitbox))
 				{
-					Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
+					Settings::Settings[ALWAYS_SHOW_HITBOX] = Settings::AlwaysShowHitbox;
 					Settings::Save(SettingsPath);
+				}
+			}
+
+			ImGui::Separator();
+
+			if (Settings::FilterSpecializationToggle && ImGui::Checkbox("Filter Spec##Specializations", &Settings::FilterSpecialization))
+			{
+				Settings::Settings[FILTER_SPECIALIZATION] = Settings::FilterSpecialization;
+				Settings::Save(SettingsPath);
+			}
+
+			if (Settings::FilterSpecialization)
+			{
+				ImGui::SameLine();
+				if (Settings::FilterProfessionToggle && ImGui::Checkbox("Show All##Specializations", &Settings::FilterProfession))
+				{
+					Settings::Settings[FILTER_PROFESSION] = Settings::FilterProfession;
+					Settings::Save(SettingsPath);
+				}
+				ImGui::SameLine();
+				if (Settings::SortByProfessionToggle && ImGui::Checkbox("Sort List##Specializations", &Settings::SortByProfession))
+				{
+					Settings::Settings[SORT_BY_PROFESSION] = Settings::SortByProfession;
+					Settings::Save(SettingsPath);
+				}
+			}
+
+			ImGui::Separator();
+
+			if (Settings::TextOnCircleToggle && ImGui::Checkbox("Text on circle##TextOnCircle", &Settings::TextOnCircle))
+			{
+				Settings::Settings[TEXT_ON_CIRCLE] = Settings::TextOnCircle;
+				Settings::Save(SettingsPath);
+			}
+
+			ImGui::Separator();
+
+			std::lock_guard<std::mutex> lock(Settings::RangesMutex);
+
+			if (Settings::SortByProfession) {
+				if (sortedIndicatorsNeedsUpdate) {
+					cachedSortedIndicators = GetSortedIndicators(Settings::RangeIndicators);
+					sortedIndicatorsNeedsUpdate = false;
+				}
+				for (const auto& [originalIndex, ri] : cachedSortedIndicators)
+				{
+					// Skip if filtering is enabled and spec doesn't match
+					if (Settings::FilterSpecialization && ri.Specialization != spec) {
+						if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) {
+							if (ri.Specialization != "ALL" && !ri.Specialization.empty()) {
+								continue;
+							}
+						}
+					}
+
+					// Create the label text
+					std::string label;
+					if (!ri.Name.empty()) {
+						label = ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius));
+						if (ri.Arc != 360) {
+							label += "/" + std::to_string(static_cast<int>(ri.Arc));
+						}
+						label += ")";
+					}
+					else {
+						label = ri.Specialization + " (" + std::to_string(static_cast<int>(ri.Radius));
+						if (ri.Arc != 360) {
+							label += "/" + std::to_string(static_cast<int>(ri.Arc));
+						}
+						label += ")";
+					}
+
+					// Draw colored square
+					float squareSize = ImGui::GetFrameHeight();  // Match checkbox size
+					ImVec2 pos = ImGui::GetCursorScreenPos();
+					ImGui::Dummy(ImVec2(squareSize, squareSize));  // Reserve space
+					ImGui::GetWindowDrawList()->AddRectFilled(
+						pos,
+						ImVec2(pos.x + squareSize, pos.y + squareSize),
+						ri.RGBA
+					);
+					ImGui::SameLine();
+
+					// Checkbox with label
+					if (ImGui::Checkbox((label + "##" + std::to_string(originalIndex)).c_str(),
+						&Settings::RangeIndicators[originalIndex].IsVisible))
+					{
+						Settings::Settings[RANGE_INDICATORS][originalIndex]["IsVisible"] = Settings::RangeIndicators[originalIndex].IsVisible;
+						Settings::Save(SettingsPath);
+					}
+				}
+			}
+			else {
+				for (size_t i = 0; i < Settings::RangeIndicators.size(); i++)
+				{
+					RangeIndicator& ri = Settings::RangeIndicators[i];
+
+					// Skip if filtering is enabled and spec doesn't match
+					if (Settings::FilterSpecialization && ri.Specialization != spec) {
+						if (!(Settings::FilterProfession && ri.Specialization == coreSpec)) {
+							if (ri.Specialization != "ALL" && !ri.Specialization.empty()) {
+								continue;
+							}
+						}
+					}
+
+					// Create the label text
+					std::string label;
+					if (!ri.Name.empty()) {
+						label = ri.Name + " (" + std::to_string(static_cast<int>(ri.Radius));
+						if (ri.Arc != 360) {
+							label += "/" + std::to_string(static_cast<int>(ri.Arc));
+						}
+						label += ")";
+					}
+					else {
+						label = ri.Specialization + " (" + std::to_string(static_cast<int>(ri.Radius));
+						if (ri.Arc != 360) {
+							label += "/" + std::to_string(static_cast<int>(ri.Arc));
+						}
+						label += ")";
+					}
+
+					// Draw colored square
+					float squareSize = ImGui::GetFrameHeight();  // Match checkbox size
+					ImVec2 pos = ImGui::GetCursorScreenPos();
+					ImGui::Dummy(ImVec2(squareSize, squareSize));  // Reserve space
+					ImGui::GetWindowDrawList()->AddRectFilled(
+						pos,
+						ImVec2(pos.x + squareSize, pos.y + squareSize),
+						ri.RGBA
+					);
+					ImGui::SameLine();
+
+					// Checkbox with label
+					if (ImGui::Checkbox((label + "##" + std::to_string(i)).c_str(),
+						&ri.IsVisible))
+					{
+						Settings::Settings[RANGE_INDICATORS][i]["IsVisible"] = ri.IsVisible;
+						Settings::Save(SettingsPath);
+					}
 				}
 			}
 		}
 
 		ImGui::EndMenu();
 	}
+}
+
+std::vector<std::pair<int, RangeIndicator>> GetSortedIndicators(const std::vector<RangeIndicator>& indicators)
+{
+	std::vector<std::pair<int, RangeIndicator>> sortedIndicators;
+
+	// Create pairs of original index and indicator
+	for (int i = 0; i < (int)indicators.size(); i++) {
+		sortedIndicators.push_back({ i, indicators[i] });
+	}
+
+	// Sort the indicators
+	std::sort(sortedIndicators.begin(), sortedIndicators.end(),
+		[](const auto& a, const auto& b) {
+			const auto& ri1 = a.second;
+			const auto& ri2 = b.second;
+
+			// Put "ALL" and empty strings at the very bottom
+			bool isGeneral1 = ri1.Specialization == "ALL" || ri1.Specialization.empty();
+			bool isGeneral2 = ri2.Specialization == "ALL" || ri2.Specialization.empty();
+			if (isGeneral1 != isGeneral2) return isGeneral2;  // Put generals at the bottom
+			if (isGeneral1 && isGeneral2) return ri1.Radius < ri2.Radius;  // Sort generals by radius
+
+			// Get core specs
+			std::string core1 = ri1.Specialization;
+			std::string core2 = ri2.Specialization;
+			if (Specializations::EliteSpecToCoreSpec(ri1.Specialization) != "Unknown") {
+				core1 = Specializations::EliteSpecToCoreSpec(ri1.Specialization);
+			}
+			if (Specializations::EliteSpecToCoreSpec(ri2.Specialization) != "Unknown") {
+				core2 = Specializations::EliteSpecToCoreSpec(ri2.Specialization);
+			}
+
+			// Put current profession's indicators at the top
+			if (core1 == coreSpec && core2 != coreSpec) return true;
+			if (core2 == coreSpec && core1 != coreSpec) return false;
+
+			// If different professions, sort by profession
+			if (core1 != core2) return core1 < core2;
+
+			// Within same profession, sort by specialization
+			if (ri1.Specialization != ri2.Specialization)
+				return ri1.Specialization < ri2.Specialization;
+
+			// Within same specialization, sort by radius
+			if (ri1.Radius != ri2.Radius)
+				return ri1.Radius < ri2.Radius;
+
+			// If same radius, sort by arc
+			return ri1.Arc < ri2.Arc;
+		});
+
+	return sortedIndicators;
 }
