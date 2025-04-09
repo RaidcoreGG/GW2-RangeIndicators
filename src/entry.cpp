@@ -24,6 +24,8 @@ void AddonLoad(AddonAPI* aApi);
 void AddonUnload();
 void ProcessKeybinds(const char* aIdentifier);
 void OnMumbleIdentityUpdated(void* aEventArgs);
+void OnAddonLoaded(void* aEventArgs);
+void OnAddonUnloaded(void* aEventArgs);
 void AddonRender();
 void AddonOptions();
 void AddonShortcut();
@@ -84,8 +86,11 @@ void AddonLoad(AddonAPI* aApi)
 
 	MumbleLink = (Mumble::Data*)APIDefs->GetResource("DL_MUMBLE_LINK");
 	NexusLink = (NexusLinkData*)APIDefs->GetResource("DL_NEXUS_LINK");
+	RTDATA = (RTAPI::RealTimeData*)APIDefs->GetResource("RTAPI");
 
 	APIDefs->SubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
+	APIDefs->SubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
+	APIDefs->SubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
 
 	APIDefs->RegisterRender(ERenderType_Render, AddonRender);
 	APIDefs->RegisterRender(ERenderType_OptionsRender, AddonOptions);
@@ -109,6 +114,8 @@ void AddonUnload()
 	APIDefs->DeregisterRender(AddonRender);
 
 	APIDefs->UnsubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
+	APIDefs->UnsubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
+	APIDefs->UnsubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
 
 	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
 
@@ -116,6 +123,7 @@ void AddonUnload()
 
 	MumbleLink = nullptr;
 	NexusLink = nullptr;
+	RTDATA = nullptr;
 }
 
 void ProcessKeybinds(const char* aIdentifier)
@@ -136,6 +144,30 @@ void OnMumbleIdentityUpdated(void* aEventArgs)
 	coreSpec = Specializations::EliteSpecToCoreSpec(spec);
 	sortedIndicatorsNeedsUpdate = true; // Invalidate cached sorted indicators because the spec has changed
 	APIDefs->Log(ELogLevel::ELogLevel_INFO, "RangeIndicators", std::string("MumbleIdentityUpdated: Spec " + spec + ", CoreSpec " + coreSpec).c_str());
+}
+
+void OnAddonLoaded(void* aEventArgs)
+{
+	if (!aEventArgs) { return; }
+
+	int sig = *(int*)aEventArgs;
+
+	if (sig == 620863532)
+	{
+		RTDATA = (RTAPI::RealTimeData*)APIDefs->GetResource("RTAPI");
+	}
+}
+
+void OnAddonUnloaded(void* aEventArgs)
+{
+	if (!aEventArgs) { return; }
+
+	int sig = *(int*)aEventArgs;
+
+	if (sig == 620863532)
+	{
+		RTDATA = nullptr;
+	}
 }
 
 std::vector<Vector3> av_interp;
@@ -178,7 +210,7 @@ bool DepthOK(float& aDepth)
 
 void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColor, float aRadius, float aVOffset, float aArc, float aThickness, bool aShaded = true, bool aShowFlanks = false)
 {
-	float fRot = atan2f(MumbleLink->CameraFront.X, MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
+	float fRot = atan2f(RTDATA ? RTDATA->CameraFacing[0] : MumbleLink->CameraFront.X, RTDATA ? RTDATA->CameraFacing[2] : MumbleLink->CameraFront.Z) * 180.0f / 3.14159f;
 	float camRot = fRot;
 	if (camRot < 0.0f) { camRot += 360.0f; }
 	if (camRot == 0.0f) { camRot = 360.0f; }
@@ -471,26 +503,34 @@ void AddonRender()
 
 	if (!Settings::IsVisible) { return; }
 
-	av_interp.push_back(MumbleLink->AvatarPosition);
-	avf_interp.push_back(MumbleLink->AvatarFront);
-	if (av_interp.size() < 15) { return; }
-	av_interp.erase(av_interp.begin());
-	avf_interp.erase(avf_interp.begin());
+	if (!RTDATA || RTDATA->GameBuild == 0)
+	{
+		RTDATA = nullptr;
+		av_interp.push_back(MumbleLink->AvatarPosition);
+		avf_interp.push_back(MumbleLink->AvatarFront);
+		if (av_interp.size() < 15) { return; }
+		av_interp.erase(av_interp.begin());
+		avf_interp.erase(avf_interp.begin());
+	}
 
-	dx::XMVECTOR camPos = { MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
+	dx::XMVECTOR camPos = RTDATA 
+		? dx::XMVECTOR{ RTDATA->CameraPosition[0], RTDATA->CameraPosition[1], RTDATA->CameraPosition[2] } 
+		: dx::XMVECTOR{ MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
 
-	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, { MumbleLink->CameraFront.X, MumbleLink->CameraFront.Y, MumbleLink->CameraFront.Z });
+	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, RTDATA
+		? dx::XMVECTOR{ RTDATA->CameraFacing[0], RTDATA->CameraFacing[1], RTDATA->CameraFacing[2] }
+		: dx::XMVECTOR{ MumbleLink->CameraFront.X, MumbleLink->CameraFront.Y, MumbleLink->CameraFront.Z });
 
 	ProjectionData projectionCtx
 	{
-		Average(av_interp),
-		Average(avf_interp),
+		RTDATA ? Vector3{ RTDATA->CharacterPosition[0], RTDATA->CharacterPosition[1], RTDATA->CharacterPosition[2] } : Average(av_interp),
+		RTDATA ? Vector3{ RTDATA->CharacterFacing[0], RTDATA->CharacterFacing[1], RTDATA->CharacterFacing[2] } : Average(avf_interp),
 
 		camPos,
 		lookAtPosition,
 
 		dx::XMMatrixLookAtLH(camPos, lookAtPosition, { 0, 1.0f, 0 }),
-		dx::XMMatrixPerspectiveFovLH(MumbleIdentity->FOV, (float)NexusLink->Width / (float)NexusLink->Height, 1.0f, 10000.0f),
+		dx::XMMatrixPerspectiveFovLH(RTDATA ? RTDATA->CameraFOV : MumbleIdentity->FOV, (float)NexusLink->Width / (float)NexusLink->Height, 1.0f, 10000.0f),
 		dx::XMMatrixIdentity()
 	};
 

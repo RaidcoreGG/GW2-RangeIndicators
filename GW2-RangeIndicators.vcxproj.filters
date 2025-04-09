@@ -57,7 +57,10 @@
     <ClInclude Include="src\Shared.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Specializations.h">
+    <ClInclude Include="src\Specializations.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RTAPI\RTAPI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -86,7 +89,7 @@
     <ClCompile Include="src\Shared.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Specializations.cpp">
+    <ClCompile Include="src\Specializations.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

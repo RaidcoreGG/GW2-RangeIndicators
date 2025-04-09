@@ -98,6 +98,7 @@ CALL $(SolutionDir)Scripts\version.bat</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\RTAPI\RTAPI.h" />
     <ClInclude Include="src\Specializations.h" />
     <ClInclude Include="src\imgui\imconfig.h" />
     <ClInclude Include="src\imgui\imgui.h" />

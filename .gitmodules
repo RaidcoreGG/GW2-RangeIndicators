@@ -10,3 +10,6 @@
 [submodule "src/imgui"]
 	path = src/imgui
 	url = https://github.com/RaidcoreGG/imgui
+[submodule "src/RTAPI"]
+	path = src/RTAPI
+	url = https://github.com/RaidcoreGG/GW2-RealTime-API-Releases/
