@@ -3,7 +3,7 @@
 
 #include "nexus/Nexus.h"
 #include "mumble/Mumble.h"
-#include "RTAPI/RTAPI.h"
+#include "RTAPI/RTAPI.hpp"
 
 extern AddonAPI*            APIDefs;
 extern Mumble::Data*        MumbleLink;
