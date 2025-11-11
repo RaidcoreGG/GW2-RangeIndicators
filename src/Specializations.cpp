@@ -10,15 +10,15 @@ namespace Specializations {
 	};
 
 	static const std::vector<ProfessionSpecs> professionSpecializations = {
-		{"Guardian", {"Dragonhunter", "Firebrand", "Willbender"}},
-		{"Warrior", {"Berserker", "Spellbreaker", "Bladesworn"}},
-		{"Engineer", {"Scrapper", "Holosmith", "Mechanist"}},
-		{"Ranger", {"Druid", "Soulbeast", "Untamed"}},
-		{"Thief", {"Daredevil", "Deadeye", "Specter"}},
-		{"Elementalist", {"Tempest", "Weaver", "Catalyst"}},
-		{"Mesmer", {"Chronomancer", "Mirage", "Virtuoso"}},
-		{"Necromancer", {"Reaper", "Scourge", "Harbinger"}},
-		{"Revenant", {"Herald", "Renegade", "Vindicator"}} };
+		{"Guardian", {"Dragonhunter", "Firebrand", "Willbender", "Luminary"}},
+		{"Warrior", {"Berserker", "Spellbreaker", "Bladesworn", "Paragon"}},
+		{"Engineer", {"Scrapper", "Holosmith", "Mechanist", "Amalgam"}},
+		{"Ranger", {"Druid", "Soulbeast", "Untamed", "Galeshot"}},
+		{"Thief", {"Daredevil", "Deadeye", "Specter", "Antiquary"}},
+		{"Elementalist", {"Tempest", "Weaver", "Catalyst", "Evoker"}},
+		{"Mesmer", {"Chronomancer", "Mirage", "Virtuoso", "Troubadour"}},
+		{"Necromancer", {"Reaper", "Scourge", "Harbinger", "Ritualist"}},
+		{"Revenant", {"Herald", "Renegade", "Vindicator", "Conduit"}} };
 
 	std::string EliteSpecToCoreSpec(std::string aSpec)
 	{
@@ -55,7 +55,10 @@ namespace Specializations {
 	{61, "Spellbreaker"}, {62, "Firebrand"},    {63, "Renegade"},
 	{64, "Harbinger"},    {65, "Willbender"},   {66, "Virtuoso"},
 	{67, "Catalyst"},     {68, "Bladesworn"},   {69, "Vindicator"},
-	{70, "Mechanist"},    {71, "Specter"},      {72, "Untamed"} };
+	{70, "Mechanist"},    {71, "Specter"},      {72, "Untamed"},
+	{73, "Troubadour"},   {74, "Paragon"},      {75, "Amalgam"},
+	{76, "Ritualist"},    {77, "Antiquary"},    {78, "Galeshot"},
+	{79, "Conduit"},      {80, "Evoker"},       {81, "Luminary"}};
 
 	const std::vector<std::string> distinctSpecializationNames = []()
 		{
