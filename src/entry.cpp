@@ -29,7 +29,7 @@ void OnMumbleIdentityUpdated(void* aEventArgs);
 void OnAddonLoaded(void* aEventArgs);
 void OnAddonUnloaded(void* aEventArgs);
 void AddonRender();
-void DrawIndicators(ImDrawList* aDrawList);
+void DrawIndicators(ImDrawList* aDrawList, const good_render::Camera* aCamera);
 void OnMoment(const good_render::Moment* aMoment);
 void AddonOptions();
 void AddonShortcut();
@@ -57,8 +57,6 @@ good_render::Slot* GoodRenderSlot = nullptr;
 // Set by a moment that drew this frame, and cleared by Nexus's render callback, which then draws nothing: the game's
 // frame comes before its Present.
 bool DrawnInMoment = false;
-// What a moment fills and hands back to the service to draw: outside ImGui's frame, so a list of our own.
-ImDrawList* MomentDrawList = nullptr;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
@@ -138,18 +136,13 @@ void AddonUnload()
 	APIDefs->UnsubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 	APIDefs->UnsubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
 	APIDefs->UnsubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
-	/* Waits for a moment in progress to return, so the list is no longer in use. */
+	/* Waits for a moment in progress to return. */
 	if (GoodRenderSlot)
 	{
 		good_render::unsubscribe(*GoodRenderSlot);
 		GoodRenderSlot = nullptr;
 	}
 	good_render::close(GoodRender);
-	if (MomentDrawList)
-	{
-		IM_DELETE(MomentDrawList);
-		MomentDrawList = nullptr;
-	}
 
 	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
 
@@ -535,17 +528,7 @@ void OnMoment(const good_render::Moment* aMoment)
 {
 	if (aMoment->moment != good_render::MOMENT_BEFORE_WINDOWS) { return; }
 
-	if (!MomentDrawList)
-	{
-		MomentDrawList = IM_NEW(ImDrawList)(ImGui::GetDrawListSharedData());
-	}
-	/* As ImGui starts each of its own lists in a frame. */
-	MomentDrawList->_ResetForNewFrame();
-	MomentDrawList->PushTextureID(ImGui::GetIO().Fonts->TexID);
-	MomentDrawList->PushClipRectFullScreen();
-
-	DrawIndicators(MomentDrawList);
-	aMoment->draw_list(MomentDrawList);
+	DrawIndicators(aMoment->draw_list, aMoment->camera);
 	DrawnInMoment = true;
 }
 
@@ -556,10 +539,11 @@ void AddonRender()
 		DrawnInMoment = false;
 		return;
 	}
-	DrawIndicators(ImGui::GetBackgroundDrawList());
+	DrawIndicators(ImGui::GetBackgroundDrawList(), nullptr);
 }
 
-void DrawIndicators(ImDrawList* aDrawList)
+/* aCamera is the camera the frame was drawn with, when drawing at a GW2 Good Render moment; MumbleLink read now is a frame ahead of it. */
+void DrawIndicators(ImDrawList* aDrawList, const good_render::Camera* aCamera)
 {
 	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
 
@@ -575,13 +559,27 @@ void DrawIndicators(ImDrawList* aDrawList)
 		avf_interp.erase(avf_interp.begin());
 	}
 
-	dx::XMVECTOR camPos = RTDATA 
-		? dx::XMVECTOR{ RTDATA->CameraPosition[0], RTDATA->CameraPosition[1], RTDATA->CameraPosition[2] } 
+	dx::XMVECTOR camPos = aCamera
+		? dx::XMVECTOR{ aCamera->position[0], aCamera->position[1], aCamera->position[2] }
+		: RTDATA
+		? dx::XMVECTOR{ RTDATA->CameraPosition[0], RTDATA->CameraPosition[1], RTDATA->CameraPosition[2] }
 		: dx::XMVECTOR{ MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
 
-	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, RTDATA
+	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, aCamera
+		? dx::XMVECTOR{ aCamera->front[0], aCamera->front[1], aCamera->front[2] }
+		: RTDATA
 		? dx::XMVECTOR{ RTDATA->CameraFacing[0], RTDATA->CameraFacing[1], RTDATA->CameraFacing[2] }
 		: dx::XMVECTOR{ MumbleLink->CameraFront.X, MumbleLink->CameraFront.Y, MumbleLink->CameraFront.Z });
+
+	/* The service's view is built without camPos + front, which loses precision far from the map's origin. */
+	dx::XMMATRIX viewMatrix = aCamera
+		? dx::XMLoadFloat4x4((const dx::XMFLOAT4X4*)aCamera->view)
+		: dx::XMMatrixLookAtLH(camPos, lookAtPosition, { 0, 1.0f, 0 });
+
+	/* Our own planes, which DepthOK() is written against. The service's aspect is the scene's, which is not the window's below the monitor's resolution. */
+	dx::XMMATRIX projectionMatrix = aCamera
+		? dx::XMMatrixPerspectiveFovLH(aCamera->fov, aCamera->aspect, 1.0f, 10000.0f)
+		: dx::XMMatrixPerspectiveFovLH(RTDATA ? RTDATA->CameraFOV : MumbleIdentity->FOV, (float)NexusLink->Width / (float)NexusLink->Height, 1.0f, 10000.0f);
 
 	ProjectionData projectionCtx
 	{
@@ -591,8 +589,8 @@ void DrawIndicators(ImDrawList* aDrawList)
 		camPos,
 		lookAtPosition,
 
-		dx::XMMatrixLookAtLH(camPos, lookAtPosition, { 0, 1.0f, 0 }),
-		dx::XMMatrixPerspectiveFovLH(RTDATA ? RTDATA->CameraFOV : MumbleIdentity->FOV, (float)NexusLink->Width / (float)NexusLink->Height, 1.0f, 10000.0f),
+		viewMatrix,
+		projectionMatrix,
 		dx::XMMatrixIdentity()
 	};
 
