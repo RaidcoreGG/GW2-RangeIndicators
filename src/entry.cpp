@@ -18,6 +18,8 @@
 
 #include "Specializations.h"
 
+#include "gw2-good-render/include/good_render.h"
+
 namespace dx = DirectX;
 
 void AddonLoad(AddonAPI* aApi);
@@ -27,6 +29,8 @@ void OnMumbleIdentityUpdated(void* aEventArgs);
 void OnAddonLoaded(void* aEventArgs);
 void OnAddonUnloaded(void* aEventArgs);
 void AddonRender();
+void DrawIndicators(ImDrawList* aDrawList, const good_render::Camera* aCamera);
+void OnMoment(const good_render::Moment* aMoment);
 void AddonOptions();
 void AddonShortcut();
 void DrawListOfRangeIndicators();
@@ -43,6 +47,16 @@ std::string coreSpec;
 
 std::vector<std::pair<int, RangeIndicator>> cachedSortedIndicators;
 bool sortedIndicatorsNeedsUpdate = true;
+
+/* GW2 Good Render, when it runs, calls its subscribers at points inside the game's frame. Drawn at the one inside the
+ * game's UI, the indicators sit over the world, nameplates and HUD but under the game's windows, instead of over
+ * everything as Nexus's render callback draws them. A frame that brings no moment is drawn through Nexus as before. */
+// The service's shared block, and our slot in it.
+good_render::Link GoodRender;
+good_render::Slot* GoodRenderSlot = nullptr;
+// Set by a moment that drew this frame, and cleared by Nexus's render callback, which then draws nothing: the game's
+// frame comes before its Present.
+bool DrawnInMoment = false;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
@@ -91,6 +105,12 @@ void AddonLoad(AddonAPI* aApi)
 	APIDefs->SubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 	APIDefs->SubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
 	APIDefs->SubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
+	/* Subscribed whether or not the service runs: nothing calls a slot while it does not. */
+	GoodRender = good_render::open();
+	if (GoodRender.block)
+	{
+		GoodRenderSlot = good_render::subscribe(*GoodRender.block, OnMoment, 0);
+	}
 
 	APIDefs->RegisterRender(ERenderType_Render, AddonRender);
 	APIDefs->RegisterRender(ERenderType_OptionsRender, AddonOptions);
@@ -116,6 +136,13 @@ void AddonUnload()
 	APIDefs->UnsubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 	APIDefs->UnsubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
 	APIDefs->UnsubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
+	/* Waits for a moment in progress to return. */
+	if (GoodRenderSlot)
+	{
+		good_render::unsubscribe(*GoodRenderSlot);
+		GoodRenderSlot = nullptr;
+	}
+	good_render::close(GoodRender);
 
 	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
 
@@ -251,7 +278,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	Vector3 rightFlank;
 	Vector3 leftFlank;
 
-	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+	ImDrawList* dl = aDrawList;
 
 	std::vector<Vector3> circleProj;
 
@@ -460,7 +487,7 @@ void DrawTextOnCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor
 		}
 	}
 
-	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+	ImDrawList* dl = aDrawList;
 
 	// Draw text at each position
 	for (const auto& [pos, angle] : textPositions) {
@@ -497,7 +524,26 @@ void DrawTextOnCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor
 	}
 }
 
+void OnMoment(const good_render::Moment* aMoment)
+{
+	if (aMoment->moment != good_render::MOMENT_BEFORE_WINDOWS) { return; }
+
+	DrawIndicators(aMoment->draw_list, aMoment->camera);
+	DrawnInMoment = true;
+}
+
 void AddonRender()
+{
+	if (DrawnInMoment)
+	{
+		DrawnInMoment = false;
+		return;
+	}
+	DrawIndicators(ImGui::GetBackgroundDrawList(), nullptr);
+}
+
+/* aCamera is the camera the frame was drawn with, when drawing at a GW2 Good Render moment; MumbleLink read now is a frame ahead of it. */
+void DrawIndicators(ImDrawList* aDrawList, const good_render::Camera* aCamera)
 {
 	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
 
@@ -513,13 +559,27 @@ void AddonRender()
 		avf_interp.erase(avf_interp.begin());
 	}
 
-	dx::XMVECTOR camPos = RTDATA 
-		? dx::XMVECTOR{ RTDATA->CameraPosition[0], RTDATA->CameraPosition[1], RTDATA->CameraPosition[2] } 
+	dx::XMVECTOR camPos = aCamera
+		? dx::XMVECTOR{ aCamera->position[0], aCamera->position[1], aCamera->position[2] }
+		: RTDATA
+		? dx::XMVECTOR{ RTDATA->CameraPosition[0], RTDATA->CameraPosition[1], RTDATA->CameraPosition[2] }
 		: dx::XMVECTOR{ MumbleLink->CameraPosition.X, MumbleLink->CameraPosition.Y, MumbleLink->CameraPosition.Z };
 
-	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, RTDATA
+	dx::XMVECTOR lookAtPosition = dx::XMVectorAdd(camPos, aCamera
+		? dx::XMVECTOR{ aCamera->front[0], aCamera->front[1], aCamera->front[2] }
+		: RTDATA
 		? dx::XMVECTOR{ RTDATA->CameraFacing[0], RTDATA->CameraFacing[1], RTDATA->CameraFacing[2] }
 		: dx::XMVECTOR{ MumbleLink->CameraFront.X, MumbleLink->CameraFront.Y, MumbleLink->CameraFront.Z });
+
+	/* The service's view is built without camPos + front, which loses precision far from the map's origin. */
+	dx::XMMATRIX viewMatrix = aCamera
+		? dx::XMLoadFloat4x4((const dx::XMFLOAT4X4*)aCamera->view)
+		: dx::XMMatrixLookAtLH(camPos, lookAtPosition, { 0, 1.0f, 0 });
+
+	/* Our own planes, which DepthOK() is written against. The service's aspect is the scene's, which is not the window's below the monitor's resolution. */
+	dx::XMMATRIX projectionMatrix = aCamera
+		? dx::XMMatrixPerspectiveFovLH(aCamera->fov, aCamera->aspect, 1.0f, 10000.0f)
+		: dx::XMMatrixPerspectiveFovLH(RTDATA ? RTDATA->CameraFOV : MumbleIdentity->FOV, (float)NexusLink->Width / (float)NexusLink->Height, 1.0f, 10000.0f);
 
 	ProjectionData projectionCtx
 	{
@@ -529,12 +589,12 @@ void AddonRender()
 		camPos,
 		lookAtPosition,
 
-		dx::XMMatrixLookAtLH(camPos, lookAtPosition, { 0, 1.0f, 0 }),
-		dx::XMMatrixPerspectiveFovLH(RTDATA ? RTDATA->CameraFOV : MumbleIdentity->FOV, (float)NexusLink->Width / (float)NexusLink->Height, 1.0f, 10000.0f),
+		viewMatrix,
+		projectionMatrix,
 		dx::XMMatrixIdentity()
 	};
 
-	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+	ImDrawList* dl = aDrawList;
 
 	if (Settings::IsHitboxVisible && (!Settings::InCombatOnly || Settings::AlwaysShowHitbox || MumbleLink->Context.IsInCombat))
 	{

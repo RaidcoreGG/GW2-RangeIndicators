@@ -13,3 +13,6 @@
 [submodule "src/RTAPI"]
 	path = src/RTAPI
 	url = https://github.com/RaidcoreGG/GW2-RealTime-API-Releases/
+[submodule "src/gw2-good-render"]
+	path = src/gw2-good-render
+	url = https://github.com/HasKha/gw2-good-render.git
