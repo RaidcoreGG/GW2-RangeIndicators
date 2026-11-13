@@ -21,13 +21,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -70,8 +70,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
-      <Command>CALL $(SolutionDir)Scripts\remoteurl.bat
-CALL $(SolutionDir)Scripts\version.bat</Command>
+      <Command>CALL "$(SolutionDir)Scripts\remoteurl.bat" "$(SolutionDir)src"
+CALL "$(SolutionDir)Scripts\version.bat" "$(SolutionDir)src"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -93,8 +93,8 @@ CALL $(SolutionDir)Scripts\version.bat</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
-      <Command>CALL $(SolutionDir)Scripts\remoteurl.bat
-CALL $(SolutionDir)Scripts\version.bat</Command>
+      <Command>CALL "$(SolutionDir)Scripts\remoteurl.bat" "$(SolutionDir)src"
+CALL "$(SolutionDir)Scripts\version.bat" "$(SolutionDir)src"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
