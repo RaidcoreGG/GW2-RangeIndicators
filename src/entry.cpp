@@ -18,6 +18,8 @@
 
 #include "Specializations.h"
 
+#include "gw2-good-render/include/good_render.h"
+
 namespace dx = DirectX;
 
 void AddonLoad(AddonAPI* aApi);
@@ -27,6 +29,8 @@ void OnMumbleIdentityUpdated(void* aEventArgs);
 void OnAddonLoaded(void* aEventArgs);
 void OnAddonUnloaded(void* aEventArgs);
 void AddonRender();
+void DrawIndicators(ImDrawList* aDrawList);
+void OnMoment(const good_render::Moment* aMoment);
 void AddonOptions();
 void AddonShortcut();
 void DrawListOfRangeIndicators();
@@ -43,6 +47,18 @@ std::string coreSpec;
 
 std::vector<std::pair<int, RangeIndicator>> cachedSortedIndicators;
 bool sortedIndicatorsNeedsUpdate = true;
+
+/* GW2 Good Render, when it runs, calls its subscribers at points inside the game's frame. Drawn at the one inside the
+ * game's UI, the indicators sit over the world, nameplates and HUD but under the game's windows, instead of over
+ * everything as Nexus's render callback draws them. A frame that brings no moment is drawn through Nexus as before. */
+// The service's shared block, and our slot in it.
+good_render::Link GoodRender;
+good_render::Slot* GoodRenderSlot = nullptr;
+// Set by a moment that drew this frame, and cleared by Nexus's render callback, which then draws nothing: the game's
+// frame comes before its Present.
+bool DrawnInMoment = false;
+// What a moment fills and hands back to the service to draw: outside ImGui's frame, so a list of our own.
+ImDrawList* MomentDrawList = nullptr;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
@@ -91,6 +107,12 @@ void AddonLoad(AddonAPI* aApi)
 	APIDefs->SubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 	APIDefs->SubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
 	APIDefs->SubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
+	/* Subscribed whether or not the service runs: nothing calls a slot while it does not. */
+	GoodRender = good_render::open();
+	if (GoodRender.block)
+	{
+		GoodRenderSlot = good_render::subscribe(*GoodRender.block, OnMoment, 0);
+	}
 
 	APIDefs->RegisterRender(ERenderType_Render, AddonRender);
 	APIDefs->RegisterRender(ERenderType_OptionsRender, AddonOptions);
@@ -116,6 +138,18 @@ void AddonUnload()
 	APIDefs->UnsubscribeEvent("EV_MUMBLE_IDENTITY_UPDATED", OnMumbleIdentityUpdated);
 	APIDefs->UnsubscribeEvent("EV_ADDON_LOADED", OnAddonLoaded);
 	APIDefs->UnsubscribeEvent("EV_ADDON_UNLOADED", OnAddonUnloaded);
+	/* Waits for a moment in progress to return, so the list is no longer in use. */
+	if (GoodRenderSlot)
+	{
+		good_render::unsubscribe(*GoodRenderSlot);
+		GoodRenderSlot = nullptr;
+	}
+	good_render::close(GoodRender);
+	if (MomentDrawList)
+	{
+		IM_DELETE(MomentDrawList);
+		MomentDrawList = nullptr;
+	}
 
 	APIDefs->DeregisterKeybind("KB_RI_TOGGLEVISIBLE");
 
@@ -251,7 +285,7 @@ void DrawCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor aColo
 	Vector3 rightFlank;
 	Vector3 leftFlank;
 
-	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+	ImDrawList* dl = aDrawList;
 
 	std::vector<Vector3> circleProj;
 
@@ -460,7 +494,7 @@ void DrawTextOnCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor
 		}
 	}
 
-	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+	ImDrawList* dl = aDrawList;
 
 	// Draw text at each position
 	for (const auto& [pos, angle] : textPositions) {
@@ -497,7 +531,35 @@ void DrawTextOnCircle(ProjectionData aProjection, ImDrawList* aDrawList, ImColor
 	}
 }
 
+void OnMoment(const good_render::Moment* aMoment)
+{
+	if (aMoment->moment != good_render::MOMENT_BEFORE_WINDOWS) { return; }
+
+	if (!MomentDrawList)
+	{
+		MomentDrawList = IM_NEW(ImDrawList)(ImGui::GetDrawListSharedData());
+	}
+	/* As ImGui starts each of its own lists in a frame. */
+	MomentDrawList->_ResetForNewFrame();
+	MomentDrawList->PushTextureID(ImGui::GetIO().Fonts->TexID);
+	MomentDrawList->PushClipRectFullScreen();
+
+	DrawIndicators(MomentDrawList);
+	aMoment->draw_list(MomentDrawList);
+	DrawnInMoment = true;
+}
+
 void AddonRender()
+{
+	if (DrawnInMoment)
+	{
+		DrawnInMoment = false;
+		return;
+	}
+	DrawIndicators(ImGui::GetBackgroundDrawList());
+}
+
+void DrawIndicators(ImDrawList* aDrawList)
 {
 	if (!NexusLink || !MumbleLink || !MumbleIdentity || MumbleLink->Context.IsMapOpen || !NexusLink->IsGameplay) { return; }
 
@@ -534,7 +596,7 @@ void AddonRender()
 		dx::XMMatrixIdentity()
 	};
 
-	ImDrawList* dl = ImGui::GetBackgroundDrawList();
+	ImDrawList* dl = aDrawList;
 
 	if (Settings::IsHitboxVisible && (!Settings::InCombatOnly || Settings::AlwaysShowHitbox || MumbleLink->Context.IsInCombat))
 	{

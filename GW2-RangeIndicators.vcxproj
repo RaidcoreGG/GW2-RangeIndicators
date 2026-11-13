@@ -111,6 +111,7 @@ CALL $(SolutionDir)Scripts\version.bat</Command>
     <ClInclude Include="src\nlohmann\json.hpp" />
     <ClInclude Include="src\Remote.h" />
     <ClInclude Include="src\Settings.h" />
+    <ClInclude Include="src\gw2-good-render\include\good_render.h" />
     <ClInclude Include="src\Shared.h" />
     <ClInclude Include="src\Version.h" />
   </ItemGroup>
